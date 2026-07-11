@@ -850,6 +850,24 @@ class MainWindow(QMainWindow):
         self._rerender_if_playing()
 
     def _delete_track(self, lane_id: str):
+        from PySide6.QtWidgets import QMessageBox
+        lane = next((l for l in self.project.lanes if l.id == lane_id), None)
+        name = lane.name if lane else "this track"
+        board_tr = None
+        if self._board is not None:
+            board_tr = next((t for t in self._board.tracks if t.get("lane_id") == lane_id), None)
+        box = QMessageBox(self)
+        box.setWindowTitle("Delete track")
+        box.setText(f"Delete “{name}”?")
+        box.setInformativeText("This removes it from the Studio and the Separation Board."
+                               if board_tr is not None else "This removes it from the Studio.")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.setStyleSheet("QMessageBox{background:#13131b;} QLabel{color:#d8d8e0;}")
+        if box.exec() != QMessageBox.Yes:
+            return
+        if board_tr is not None:                 # drop it on the separator too (this also drops the lane)
+            self._board._delete_track(board_tr)
         self.project.lanes = [l for l in self.project.lanes if l.id != lane_id]
         self.project.events = [e for e in self.project.events if e.lane_id != lane_id]
         self.settings.hide()

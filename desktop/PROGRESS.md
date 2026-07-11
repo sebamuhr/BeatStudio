@@ -1,8 +1,16 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.26.1** (shown in the window title bar as
-`Beat Studio · v0.26.1 · AI matching ✓`).
+continuing in a new chat.** Current version: **v0.26.2** (shown in the window title bar as
+`Beat Studio · v0.26.2 · AI matching ✓`).
+
+## v0.26.2 — Delete track (gear ▸ Delete) now confirms + removes it from the Separation Board too
+`MainWindow._delete_track` used to silently drop only the Studio lane. Now it shows a confirmation
+(`QMessageBox`, matching the Clear-all style) naming the track, and on Yes also removes the matching
+board track via `self._board._delete_track(board_tr)` (found by `lane_id`), which reverse-syncs the lane
+away as well. Cancel is the default button and does nothing. The dialog text adapts to whether a board
+track exists. Verified headless: confirmed delete drops the track from BOTH windows (+ its events);
+Cancel keeps it.
 
 ## v0.26.1 — board buttons truly keep their shape · "Original" acts on the whole soundwave (no points)
 - **Stop button shape fix (for real):** the `■` stop style used a hard-coded `_STOP_CSS` that dropped the
