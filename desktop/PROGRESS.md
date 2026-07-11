@@ -4,6 +4,21 @@
 continuing in a new chat.** Current version: **v0.26.2** (shown in the window title bar as
 `Beat Studio · v0.26.2 · AI matching ✓`).
 
+## ⚙️ REPO & INSTALL (as of this session — 2026-07-11)
+- **Beat is now its OWN git repo** at `~/Documents/APPS/Beat`, remote
+  **`github.com/sebamuhr/BeatStudio`** (branch `master`). It was split out of the old
+  DeamonCLI monorepo. The `~/Documents/APPS` folder is **no longer a git repo** (that was the
+  bug — it was DeamonCLI's repo rooted too high, sweeping in sibling apps). DeamonCLI now lives
+  at `~/Documents/APPS/DeamonCLI` as its own repo. So: `git add/commit/push` from inside
+  `Beat/` goes to BeatStudio and nothing else.
+- **One-command install** (Linux only): `install.sh` at the repo root + a root `README.md`.
+  `curl -fsSL https://raw.githubusercontent.com/sebamuhr/BeatStudio/master/install.sh | bash`
+  (or `./install.sh` from a clone; `--with-ai` adds CLAP torch/transformers). It makes the
+  venv at `desktop/.venv`, installs `desktop/requirements.txt` (now CORE-only; AI is opt-in),
+  installs PortAudio, and adds an apps-menu launcher + a `beatstudio` command.
+- Run locally for dev: `bash desktop/run.sh` (execs `desktop/.venv/bin/python app.py`).
+- Headless tests still: `cd desktop && QT_QPA_PLATFORM=offscreen BEAT_NO_GL=1 ./.venv/bin/python board_check.py`.
+
 ## v0.26.2 — Delete track (gear ▸ Delete) now confirms + removes it from the Separation Board too
 `MainWindow._delete_track` used to silently drop only the Studio lane. Now it shows a confirmation
 (`QMessageBox`, matching the Clear-all style) naming the track, and on Yes also removes the matching
