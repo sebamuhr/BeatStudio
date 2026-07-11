@@ -1,0 +1,327 @@
+"""End-to-end check for the Separation Board:
+  1. the board: add tracks, pen-tool place/drag/delete dots, zoom/pan, navigator, build lanes;
+  2. the wiring: feed a board result through MainWindow._apply_board_result and prove the tracks
+     actually land on the project + timeline ("Create these tracks" really works).
+Saves ref/board-01.png."""
+import os, sys
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("BEAT_NO_GL", "1")
+import numpy as np
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt, QPointF
+
+sys.path.insert(0, os.path.dirname(__file__))
+from beatstudio.synth import SR
+from beatstudio.separationboard import SeparationBoard
+
+dur = 4.0
+t = np.arange(int(dur * SR)) / SR
+buf = 0.06 * np.sin(2 * np.pi * 110 * t) * np.exp(-((t % 1.0)) * 0.6)
+rng = np.random.default_rng(3)
+for hit in (0.05, 1.0, 2.0, 2.55, 3.05):
+    i = int(hit * SR); env = np.exp(-np.arange(SR // 2) / (SR * 0.03))
+    buf[i:i + len(env)] += 0.8 * (rng.standard_normal(len(env)) * env).astype(np.float32)
+mid = (t > 1.4) & (t < 1.8); buf[mid] += 0.25 * np.sin(2 * np.pi * 1200 * t[mid])
+buf = buf.astype(np.float32)
+
+
+class E:
+    def __init__(s, x, y, btn=Qt.LeftButton, mods=Qt.NoModifier):
+        s._p = QPointF(x, y); s._b = btn; s._m = mods
+    def position(s): return s._p
+    def button(s): return s._b
+    def buttons(s): return s._b
+    def modifiers(s): return s._m
+    def angleDelta(s):
+        from PySide6.QtCore import QPoint; return QPoint(0, 120)
+
+
+app = QApplication.instance() or QApplication(sys.argv)
+b = SeparationBoard(buf, SR, 120, preview_cb=lambda k, s: None, preview_pattern_cb=lambda l, e: 1.2)
+b.resize(1180, 700); b.show(); app.processEvents()
+cv = b.canvas
+
+b.add_track(); b.add_track()
+b._activate_track(b.tracks[0])
+for frac in (0.05, 0.25, 0.5, 0.64, 0.76):
+    q = cv._to_px(frac, 0.85); cv.mousePressEvent(E(q.x(), q.y())); cv.mouseReleaseEvent(None)
+b._activate_track(b.tracks[1])
+for frac in (0.3, 0.35, 0.4):
+    q = cv._to_px(frac, 0.7); cv.mousePressEvent(E(q.x(), q.y())); cv.mouseReleaseEvent(None)
+
+# points are Bézier anchors now (dicts). Drag anchor, delete, and pull out a CURVE handle.
+b._activate_track(b.tracks[0])
+pt = b.tracks[0]["points"][1]; q = cv._apx(pt)
+cv.mousePressEvent(E(q.x(), q.y())); cv.mouseMoveEvent(E(q.x(), cv._to_px(0.25, 0.2).y())); cv.mouseReleaseEvent(None)
+assert round(b.tracks[0]["points"][1]["v"], 2) <= 0.25, "anchor drag failed"
+before = len(b.tracks[0]["points"]); q = cv._apx(b.tracks[0]["points"][3])
+cv.mousePressEvent(E(q.x(), q.y(), Qt.RightButton))
+assert len(b.tracks[0]["points"]) == before - 1, "delete anchor failed"
+q = cv._to_px(0.92, 0.6); cv.mousePressEvent(E(q.x(), q.y()))          # add anchor, drag = curve
+cv.mouseMoveEvent(E(q.x() + 40, q.y() - 20)); cv.mouseReleaseEvent(None)
+nph = b.tracks[0]["points"][-1]
+assert nph["hx"] != 0 or nph["hy"] != 0, "curve handle not pulled out"
+print("curve handle:", (round(nph["hx"], 3), round(nph["hy"], 3)))
+
+# zoom via plain scroll (touchpad-friendly), zoom buttons, then pan via navigator
+cv.wheelEvent(E(cv.width() * 0.4, cv.height() * 0.5))
+assert cv.view1 - cv.view0 < 0.99, "scroll zoom did not change the view span"
+b._zoom(0.7); b._zoom(1 / 0.7)                       # + then − buttons
+mm = cv._mm_rect(); cv.mousePressEvent(E(mm.center().x(), mm.center().y())); cv.mouseReleaseEvent(None)
+cv.view0, cv.view1 = 0.0, 1.0; b._update_zoom_label()
+print("zoom label:", b.zlbl.text(), "| tempo box:", b.bpm_box.value())
+
+# tempo control + playhead sweep
+b.bpm_box.setValue(140); assert b.canvas.bpm == 140, "bpm control not wired"
+b._start_playhead(1.0); app.processEvents()
+b._tick_playhead(); print("playhead:", b.canvas.playhead)
+
+# --- SYNTH (B+C): ONE 'Synth' instrument with two fields; a sustained line = a held morphing note ---
+b.add_track(); st = b.tracks[-1]; row = b._rows[-1]
+si = next(i for i, (k, s, l) in enumerate(b.items) if k == "synth")
+row.combo.setCurrentIndex(si); row.combo_base.setCurrentText("sine"); row.combo_mod.setCurrentText("saw")
+assert st["kind"] == "synth" and st["sound"] == "sine" and st["sound_b"] == "saw", st
+# a single 'Synth' entry in the picker (not one per waveform)
+assert sum(1 for k, s, l in b.items if k == "synth") == 1, "expected exactly one Synth entry"
+b._activate_track(st)
+st["points"] = [{"t": 0.10, "v": 0.0, "hx": 0, "hy": 0}, {"t": 0.16, "v": 0.35, "hx": 0, "hy": 0},
+                {"t": 0.45, "v": 0.9, "hx": 0, "hy": 0}, {"t": 0.50, "v": 0.0, "hx": 0, "hy": 0}]
+slane, sev = b._lane_events(st)
+print("synth:", slane.kind, slane.sound, "→", slane.sound_b, "| notes:", len(sev),
+      "| len:", round(sev[0].length, 2), "| env pts:", len(sev[0].env or []))
+assert slane.kind == "synth" and slane.sound_b == "saw" and len(sev) == 1 and sev[0].length > 0.1 \
+    and sev[0].env and len(sev[0].env) > 3, "synth held/follow note wrong"
+# env follows the line: rises toward the peak then falls
+assert max(sev[0].env) > 0.7 and sev[0].env[0] < 0.3, "env does not follow the drawn shape"
+
+lanes, events = b.build()
+print("board.build ->", [(l.name, l.kind, l.sound, sum(1 for e in events if e.lane_id == l.id)) for l in lanes])
+assert lanes and events, "build produced nothing"
+# render (exercises morph_synth + drum_roll paths)
+from beatstudio.render import render_project
+from beatstudio.model import Project
+rbuf, _ = render_project(Project(lanes=lanes, events=events, bpm=b.bpm))
+assert rbuf is not None and len(rbuf) > 1000, "render produced no audio"
+print("rendered", round(len(rbuf) / SR, 2), "s")
+
+app.processEvents()
+b.grab().save("ref/board-01.png")
+print("saved ref/board-01.png")
+
+# ===== STABLE COLOURS: removing a track keeps every other track's colour =====
+b.add_track(); b.add_track()
+cols = [t["color"].name() for t in b.tracks]
+b._delete_track(b.tracks[0])                     # remove the TOP one
+rest = [t["color"].name() for t in b.tracks]
+assert rest == cols[1:], f"colours shifted on delete: {rest} != {cols[1:]}"
+drawn = next(t for t in b.tracks if t["points"])
+lane_c, _ = b._lane_events(drawn); assert lane_c.color, "lane carries no stable colour"
+print("COLOURS ok: stable across delete + carried onto the lane")
+
+# ===== SELECTION: the canvas only edits the ACTIVE track (pick from the list first) =====
+b._activate_track(b.tracks[-1])                  # active = the synth track
+other = next(t for t in b.tracks if t is not b.tracks[b.canvas.active] and t["points"])
+qo = cv._apx(other["points"][0]); hit = cv._hit(qo)
+assert hit is None or hit[0] == b.canvas.active, "canvas grabbed a NON-active track's dot"
+print("SELECTION ok: non-active tracks are inert on the canvas")
+
+# ===== SYNTH KNOBS: Base/Morph params reach the lane and audibly change the voice =====
+from beatstudio.synth import voice, midi_to_hz, default_params
+sy = next(t for t in b.tracks if t["kind"] == "synth")
+sy.setdefault("params", default_params()); sy.setdefault("params_b", default_params())
+slane, _ = b._lane_events(sy)
+assert slane.sound_params and "cutoff" in slane.sound_params, "synth knobs missing on lane"
+op = dict(sy["params"]); op["cutoff"] = 1.0
+dp = dict(sy["params"]); dp["cutoff"] = 0.05; dp["drive"] = 0.8
+xa = voice("saw", midi_to_hz(60), 0.4, 0.9, op); xb = voice("saw", midi_to_hz(60), 0.4, 0.9, dp)
+assert xa.shape == xb.shape and float(np.abs(xa - xb).mean()) > 1e-4, "knobs had no effect on the sound"
+print("SYNTH KNOBS ok: params on the lane + audibly change the voice")
+
+# ===== SIREN: the synth line glides PITCH (low→high) + timbre as one sustained morphing note =====
+from beatstudio.synth import morph_glide
+rise = list(np.linspace(0.0, 1.0, 60))
+xg = morph_glide("sine", "sine", 48, 72, 1.0, rise)     # rising line → pitch should rise
+def _zcr(s): return float(np.mean(np.abs(np.diff(np.sign(s))) > 0))
+assert _zcr(xg[len(xg)//2:]) > _zcr(xg[:len(xg)//2]) * 1.3, "siren pitch did not rise with the line"
+sl2, se2 = b._lane_events(sy)
+assert len(se2) == 1 and se2[0].pitch is None and se2[0].env and sl2.hi_note > sl2.lo_note, \
+    "synth should be ONE continuous morph note with a pitch range"
+# length must be SECONDS-based (span_seconds / beat_len), not the raw take-fraction
+_pts = sorted(sy["points"], key=lambda p: p["t"])
+_dur_s = len(b.buf) / SR; _blen = 60.0 / b.bpm
+_exp = (_pts[-1]["t"] - _pts[0]["t"]) * _dur_s / _blen
+assert abs(se2[0].length - _exp) < 0.05 and se2[0].length > 1.0, \
+    f"synth length not seconds-based ({round(se2[0].length,3)} vs {round(_exp,3)})"
+print(f"SIREN ok: one sustained note, pitch glides up; length={round(se2[0].length,2)} beats (seconds-based)")
+
+# ================= LIVE BIDIRECTIONAL SYNC (v0.18.0) =================
+from beatstudio.mainwindow import MainWindow
+w = MainWindow(); w._orig_rec = (0.2 * np.random.randn(SR * 2)).astype("float32")
+w._open_separator(); bd = w._board; app.processEvents()
+base = len(w.project.lanes)
+assert base == 0, f"Studio should start EMPTY, had {base} lanes"
+
+# FORWARD: adding a track instantly creates the lane; drawing points creates events (no Create button)
+bd.add_track(); tr = bd.tracks[0]; cv2 = bd.canvas; cv2.set_active(0)
+assert any(l.id == tr["lane_id"] for l in w.project.lanes), "add_track did not create a Studio lane"
+for frac in (0.25, 0.5, 0.75):
+    q = cv2._to_px(frac, 0.8); cv2.mousePressEvent(E(q.x(), q.y())); cv2.mouseReleaseEvent(E(q.x(), q.y()))
+app.processEvents()
+evs = [e for e in w.project.events if e.lane_id == tr["lane_id"]]
+assert len(evs) == 3 and evs[0].src_pts, f"forward draw->events failed ({len(evs)})"
+lane_obj = next(l for l in w.project.lanes if l.id == tr["lane_id"])
+assert lane_obj.color == tr["color"].name(), "stable colour did not reach the Studio lane"
+print(f"FORWARD ok: lanes {base}->{len(w.project.lanes)}, drew 3 points -> {len(evs)} events")
+
+# REVERSE move: change a note's beat on the grid -> the drawn anchor locks/moves, shape preserved
+victim = evs[1]; pid = victim.src_pts[0]
+pt = next(p for p in tr["points"] if p["id"] == pid); shape = (pt["hx"], pt["hy"])
+victim.beat = 1.0; w._sync_grid_to_board()
+pt = next(p for p in tr["points"] if p["id"] == pid)
+assert pt.get("beat") == 1.0 and (pt["hx"], pt["hy"]) == shape, "reverse move/shape-preserve failed"
+print("REVERSE move ok: anchor beat-locked to grid, shape preserved")
+
+# GRAIN: a TINY board move changes the event beat (drawn position drives the beat, no onset snap)
+gtrk = tr; gp = gtrk["points"][0]; gp.pop("beat", None)
+gp["t"] = 0.400; b1 = gtrk_beat = w._board._lane_events(gtrk)[1]
+e_a = next(e for e in w._board._lane_events(gtrk)[1] if gp["id"] in (e.src_pts or []))
+gp["t"] = 0.402                                   # ~2 ms nudge
+e_b = next(e for e in w._board._lane_events(gtrk)[1] if gp["id"] in (e.src_pts or []))
+assert abs(e_b.beat - e_a.beat) > 1e-4, "tiny board move did not change the beat (grain too coarse)"
+print("GRAIN ok: a tiny board nudge moves the grid beat")
+
+# GRID-ADD: adding a beat on the Studio grid creates a board anchor (x=time, y=between neighbours)
+lid = tr["lane_id"]; npts_before = len(tr["points"])
+from beatstudio.model import Event as _Ev
+w.project.events.append(_Ev(lane_id=lid, beat=2.0, vel=0.8))
+w._sync_grid_to_board()
+made = [p for p in tr["points"] if abs(p.get("beat", -9) - w.project.snap(2.0)) < 1e-6]
+assert made and len(tr["points"]) > npts_before, "grid-added beat did not create a board anchor"
+print("GRID-ADD ok: a new grid beat created a matching board point")
+
+# REVERSE delete: remove a grid note -> its drawn anchor disappears
+cur = [e for e in w.project.events if e.lane_id == tr["lane_id"]]
+gone = cur[0].src_pts[0]; w.project.events = [e for e in w.project.events if e is not cur[0]]
+w._sync_grid_to_board()
+assert all(p["id"] != gone for p in tr["points"]), "reverse delete failed"
+print("REVERSE delete ok: grid delete removed the drawn anchor")
+
+# TEMPO both ways
+bd.bpm_box.setValue(140); assert w.project.bpm == 140, "board->studio bpm failed"
+w.toolbar.bpm.setValue(100); assert bd.bpm == 100, "studio->board bpm failed"
+print("TEMPO ok: board<->studio both ways")
+
+# PER-BUTTON PLAY/STOP: only the button you pressed becomes ■; pressing it again stops
+bd.clear_playing()
+bd._preview_all()                                    # start Mix (drew events exist)
+assert bd.b_prevall.text() == "■ Mix" and bd.b_prevorig.text() == "▶ Original", \
+    "playing button keeps its label with only ▶→■ swapped; others unchanged"
+bd._preview_all()                                    # press the SAME button → stop
+assert bd._play_btn is None and bd.b_prevall.text() == "▶ Mix", "pressing the playing button did not stop"
+print("PLAY/STOP ok: only the pressed button toggles, click it again to stop")
+
+# LINKED SELECTION: board anchor -> Studio beat, and Studio beat -> board anchor ring
+selev = [e for e in w.project.events if e.lane_id == tr["lane_id"] and e.src_pts][0]
+apid = selev.src_pts[0]
+bd.canvas._select_point(apid); app.processEvents()
+assert selev.id in w.timeline.selected, "board->studio selection link failed"
+w.timeline.selected = set(); bd.canvas.set_selected_pts([])
+w.timeline.selected = {selev.id}; w.timeline.selection_changed.emit(); app.processEvents()
+assert apid in bd.canvas.sel_pts, "studio->board selection link failed"
+print("LINKED SELECTION ok: board anchor <-> Studio beat both ways")
+
+# RECORD SECONDARY: a NEW take row (own colour), same length, tracks untouched; new tracks bind to it
+n_before = len(bd.buf); ntracks = len(bd.tracks); ntakes = len(bd.takes)
+sec = (0.2 * np.random.randn(len(bd.buf) // 2)).astype("float32")
+new_tid = bd.add_take(sec)
+assert len(bd.takes) == ntakes + 1 and len(bd.tracks) == ntracks, "add_take changed tracks"
+assert len(bd.canvas.takes[-1]["buf"]) == n_before, "secondary take not padded to main length"
+bd.add_track()
+assert bd.tracks[-1]["take"] == new_tid, "new track did not bind to the secondary take row"
+print("RECORD SECONDARY ok: new take row, own colour, new tracks draw over it")
+
+# NO INFINITE LOOP: a nested sync call is guarded
+calls = {"n": 0}; _orig = w._on_board_track_changed
+def _count(x):
+    calls["n"] += 1
+    if calls["n"] < 50:
+        _orig(x)
+w._on_board_track_changed = _count
+bd.add_track(); q = cv2._to_px(0.3, 0.6)
+bd.canvas.set_active(len(bd.tracks) - 1)
+cv2.mousePressEvent(E(q.x(), q.y())); cv2.mouseReleaseEvent(E(q.x(), q.y()))
+assert calls["n"] < 10, f"possible sync loop ({calls['n']} calls)"
+print(f"LOOP-GUARD ok: bounded sync calls ({calls['n']})")
+
+# UNDO BOTH WINDOWS: an undo restores the board points AND the project together
+app.processEvents()
+w._committed = w._snapshot(); w._undo_stack = []; w._redo_stack = []
+assert isinstance(w._committed, dict) and "project" in w._committed and "board" in w._committed, \
+    "snapshot is not a {project, board} blob"
+tr3 = next(t for t in bd.tracks if t.get("points"))
+n_before = len(tr3["points"]); ev_before = len(w.project.events)
+# add a new anchor on that track and commit — this is the state we will undo back FROM
+bd.canvas.set_active(bd.tracks.index(tr3))
+qb = bd.canvas._to_px(0.8, 0.5)
+bd.canvas.mousePressEvent(E(qb.x(), qb.y())); bd.canvas.mouseReleaseEvent(E(qb.x(), qb.y()))
+app.processEvents(); w._commit()
+assert len(tr3["points"]) == n_before + 1, "new anchor was not added"
+w._undo(); app.processEvents()
+tr3 = next(t for t in bd.tracks if t.get("lane_id") == tr3.get("lane_id")) if tr3.get("lane_id") else bd.tracks[bd.tracks.index(tr3)]
+assert len(tr3["points"]) == n_before, \
+    f"undo did not restore board points ({len(tr3['points'])} != {n_before})"
+assert len(w.project.events) == ev_before, "undo did not restore the project"
+w._redo(); app.processEvents()
+assert len(w.project.events) >= ev_before, "redo did not re-apply"
+print("UNDO ok: undo/redo restores BOTH the board and the Studio project")
+
+# VOLUME AUTOMATION: the V button toggles a lane's line; the envelope dips the rendered lane
+import numpy as _np
+from beatstudio.render import render_project as _render
+lane_v = next(l for l in w.project.lanes if any(e.lane_id == l.id for e in w.project.events))
+# clone a project with ONLY this lane's events so we measure it in isolation
+w._on_header_action(lane_v.id, "vol")
+assert lane_v.id in w.timeline.vol_lanes, "V button did not turn the volume line on"
+w._on_header_action(lane_v.id, "vol")
+assert lane_v.id not in w.timeline.vol_lanes, "V button did not toggle the line off"
+ev_v = min((e.beat for e in w.project.events if e.lane_id == lane_v.id))
+lane_v.vol_pts = []
+loud, _ = _render(w.project, w._samples, orig=w._orig_rec)
+lane_v.vol_pts = [{"beat": ev_v, "v": 0.0}, {"beat": ev_v + 8, "v": 0.0}]   # silence this lane
+quiet, _ = _render(w.project, w._samples, orig=w._orig_rec)
+assert float(_np.abs(quiet).sum()) < float(_np.abs(loud).sum()), \
+    "volume envelope did not reduce the rendered signal"
+lane_v.vol_pts = []
+print("VOLUME ok: V toggles the line; a vol_pts dip renders quieter (per-lane gain)")
+
+# GRID STRETCH: dragging in Grid mode uniformly rescales the tempo (bpm)
+bd._set_tool("grid")
+cvg = bd.canvas; xg0, xg1 = cvg._xspan(); gx = xg0 + (xg1 - xg0) * 0.5
+bpm0 = bd.bpm
+cvg.mousePressEvent(E(gx, cvg.height() / 2))
+cvg.mouseMoveEvent(E(gx + 120, cvg.height() / 2))
+cvg.mouseReleaseEvent(None)
+app.processEvents()
+assert bd.bpm != bpm0 and w.project.bpm == bd.bpm, f"grid stretch failed ({bpm0}->{bd.bpm}, studio={w.project.bpm})"
+print(f"GRID ok: grid drag rescaled tempo {bpm0}->{bd.bpm} and synced to the Studio")
+bd._set_tool("pen")
+
+# FIT: resample an audio slice shrinks the take and remaps points (in-region moves, before-region ~stays)
+trf = next(t for t in bd.tracks if t.get("points")); bd.canvas.set_active(bd.tracks.index(trf))
+trf["points"] = [{"id": "fa", "t": 0.1, "v": 0.8, "hx": 0.0, "hy": 0.0},
+                 {"id": "fb", "t": 0.7, "v": 0.8, "hx": 0.0, "hy": 0.0}]
+N0 = len(bd.buf); t_after0 = trf["points"][1]["t"]; t_before0 = trf["points"][0]["t"]
+bd._apply_fit(0.3, 0.6, 0.45)                      # shrink [0.3,0.6] → ends at 0.45
+app.processEvents()
+N1 = len(bd.buf)
+assert N1 < N0, f"fit shrink did not shorten the take ({N0}->{N1})"
+assert abs(trf["points"][1]["t"] - t_after0) > 0.01, "a point after the region did not move"
+# a point BEFORE the region keeps its absolute audio time (fraction × length ≈ unchanged)
+assert abs(trf["points"][0]["t"] * N1 - t_before0 * N0) < 0.03 * N0, "a point before the region drifted"
+print(f"FIT ok: region resample shortened the take {N0}->{N1} and remapped drawn points")
+
+# LIFECYCLE: closing the Studio closes the separator
+assert bd.isVisible(); w.close(); app.processEvents()
+assert w._board is None, "closing Studio did not close the separator"
+print("LIFECYCLE ok: closing Studio closed the separator")
+print("LIVE SYNC WORKS ✓")

@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Beatbox">
+<title>Beatbox to MIDI · v0.7.6</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<!-- Vendored React so the app boots standalone (the DC platform normally injects these). Guarded: only loads if a host hasn't already provided React. -->
+<script>window.__needReact = !window.React || !window.ReactDOM;</script>
+<script>if (window.__needReact) document.write('<script src="./vendor/react.production.min.js"><\/script><script src="./vendor/react-dom.production.min.js"><\/script>');</script>
+<script src="./support.js"></script>
+<script>
+  // Register the service worker so the app is installable + works offline.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('SW registration failed', e));
+    });
+  }
+</script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#0a0a0f;}
+  *{box-sizing:border-box;}
+  @keyframes recpulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;background:#26262f;outline:none;cursor:pointer;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;cursor:pointer;border:3px solid #ff5d5d;}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;cursor:pointer;border:3px solid #ff5d5d;}
+  .tl::-webkit-scrollbar{height:10px;}
+  .tl::-webkit-scrollbar-track{background:#0d0d12;}
+  .tl::-webkit-scrollbar-thumb{background:#2a2a36;border-radius:5px;}
+  select.inst{-webkit-appearance:none;appearance:none;background:#16161e url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%237a7a88' stroke-width='1.5' fill='none'/></svg>") no-repeat right 8px center;border:1px solid #2a2a36;color:#e8e8ef;border-radius:7px;padding:6px 22px 6px 9px;font-family:inherit;font-size:12px;font-weight:500;outline:none;cursor:pointer;width:100%;}
+</style>
+</helmet>
+<div style="min-height:100vh;background:radial-gradient(1200px 600px at 50% -10%,#15151f,#0a0a0f);color:#e8e8ef;font-family:'Space Grotesk',system-ui,sans-serif;padding:22px 20px 70px;">
+  <div style="max-width:none;margin:0;">
+
+    <div style="background:#101017;border:1px solid #1e1e28;border-radius:16px;padding:20px;margin-bottom:16px;position:relative;">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <button onClick="{{ onPlay }}" title="{{ playTitle }}" style="border:none;cursor:pointer;font-family:inherit;font-size:18px;width:54px;height:54px;border-radius:12px;background:{{ playBg }};color:{{ playFg }};display:flex;align-items:center;justify-content:center;">{{ playIcon }}</button>
+        <button onClick="{{ onStop }}" title="Stop" style="border:1px solid #2a2a36;cursor:pointer;width:54px;height:54px;border-radius:12px;background:{{ stopBg }};display:flex;align-items:center;justify-content:center;"><span style="width:13px;height:13px;border-radius:2px;background:{{ stopFg }};"></span></button>
+        <div style="width:1px;height:34px;background:#22222c;margin:0 3px;"></div>
+        <button onClick="{{ toggleLoop }}" title="{{ loopTitle }}" style="border:1px solid {{ loopBorder }};cursor:pointer;font-family:inherit;font-size:20px;width:54px;height:54px;border-radius:12px;background:{{ loopBg }};color:{{ loopFg }};display:flex;align-items:center;justify-content:center;">⟲</button>
+        <button onClick="{{ toggleOutput }}" title="{{ outTitle }}" style="border:1px solid {{ outBorder }};cursor:pointer;font-size:19px;width:54px;height:54px;border-radius:12px;background:{{ outBg }};color:{{ outFg }};display:flex;align-items:center;justify-content:center;">{{ outIcon }}</button>
+        <button onClick="{{ toggleMicPanel }}" title="Mic &amp; extraction" style="border:1px solid {{ micPanelBorder }};cursor:pointer;font-size:19px;width:54px;height:54px;border-radius:12px;background:{{ micPanelBg }};color:{{ micPanelFg }};display:flex;align-items:center;justify-content:center;position:relative;">🎤<sc-if value="{{ micActiveDot }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:#48e08b;"></span></sc-if></button>
+        <button onClick="{{ toggleTimingPanel }}" title="Tempo, metronome &amp; timing" style="border:1px solid {{ metroPanelBorder }};cursor:pointer;font-size:20px;width:54px;height:54px;border-radius:12px;background:{{ metroPanelBg }};color:{{ metroPanelFg }};display:flex;align-items:center;justify-content:center;">♩</button>
+        <div style="width:1px;height:34px;background:#22222c;margin:0 3px;"></div>
+        <button onClick="{{ onRecMaster }}" title="Record one beatbox of your whole groove — it auto-splits every distinct sound into its own instrument track" style="border:1px solid {{ masterBorder }};cursor:pointer;font-family:inherit;font-weight:600;font-size:13px;padding:0 16px;height:54px;border-radius:12px;background:{{ masterBg }};color:{{ masterFg }};display:flex;align-items:center;gap:9px;white-space:nowrap;"><span style="width:12px;height:12px;border-radius:50%;background:{{ masterDot }};{{ masterDotAnim }}"></span>{{ masterLabel }}</button>
+        <div style="flex:1;"></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8a8a99;text-align:right;margin-right:4px;">
+          <div><span style="color:#e8e8ef;font-size:20px;font-weight:700;">{{ evCount }}</span> notes</div>
+          <div style="margin-top:2px;">{{ rowCount }} tracks · {{ bpm }} BPM</div>
+        </div>
+        <button onClick="{{ onUndo }}" title="Undo" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:18px;width:48px;height:54px;border-radius:11px;opacity:{{ undoOp }};">↶</button>
+        <button onClick="{{ onRedo }}" title="Redo" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:18px;width:48px;height:54px;border-radius:11px;opacity:{{ redoOp }};">↷</button>
+        <button onClick="{{ onSaveGroove }}" title="Save this groove (works offline; syncs to your computer on the same WiFi)" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-weight:600;font-size:13px;padding:0 14px;height:54px;border-radius:11px;">Save</button>
+        <button onClick="{{ onToggleGrooves }}" title="{{ syncTitle }}" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-weight:600;font-size:13px;padding:0 13px;height:54px;border-radius:11px;display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:{{ syncDotColor }};flex:none;"></span>Grooves</button>
+        <button onClick="{{ onToggleSounds }}" title="My Sounds — your personal sample gallery (use them as instruments on any track)" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-weight:600;font-size:13px;padding:0 14px;height:54px;border-radius:11px;">My Sounds</button>
+        <button onClick="{{ onExport }}" title="Export .mid" style="border:none;cursor:pointer;background:#e8e8ef;color:#0a0a0f;font-family:inherit;font-weight:700;font-size:20px;width:54px;height:54px;border-radius:11px;display:flex;align-items:center;justify-content:center;">↓</button>
+      </div>
+
+      <sc-if value="{{ showMicPanel }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:84px;left:20px;z-index:30;width:420px;max-width:calc(100% - 40px);background:#13131b;border:1px solid #2a2a36;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,0.5);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#8a8a99;font-weight:600;">Mic &amp; extraction</div>
+            <button onClick="{{ closePanels }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:13px;">Close ×</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span style="font-size:10px;color:#6a6a78;width:34px;">INPUT</span>
+            <div style="flex:1;height:9px;border-radius:5px;background:#16161e;position:relative;overflow:hidden;border:1px solid #20202a;">
+              <div ref="{{ levelRef }}" style="position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#48e08b,#ffb13d,#ff5d5d);"></div>
+              <div style="position:absolute;top:-1px;bottom:-1px;width:2px;background:#ff5d5d;left:{{ threshLeft }};"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button onClick="{{ onToggleMic }}" style="flex:1;border:1px solid {{ micBorder }};cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:9px;border-radius:8px;background:{{ micBg }};color:{{ micFg }};">{{ micLabel }}</button>
+            <button onClick="{{ onLive }}" title="Jam through the mic without recording" style="flex:1;border:1px solid {{ improvBorder }};cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:9px;border-radius:8px;background:{{ improvBg }};color:{{ improvFg }};">{{ improvLabel }}</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:13px;color:#b8b8c6;">Extraction sensitivity</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#8a8a99;">{{ sens }}%</span>
+          </div>
+          <input type="range" min="0" max="100" step="1" value="{{ sens }}" onChange="{{ setSens }}" oninput="{{ setSens }}" style="width:100%;margin-bottom:6px;">
+          <div style="font-size:11.5px;color:#5a5a68;line-height:1.5;margin-bottom:14px;">Higher = catches softer hits when extracting. Each track also has its own noise gate in ⚙.</div>
+          <div style="font-size:13px;color:#b8b8c6;margin-bottom:9px;">Mic EQ <span style="font-size:11px;color:#5a5a68;">— shapes the input before extraction</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <sc-for list="{{ micEqBands }}" as="bnd" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="width:48px;font-size:12px;color:#9a9aa8;flex:none;">{{ bnd.name }}</span>
+                <input type="range" min="-15" max="15" step="1" value="{{ bnd.value }}" onChange="{{ bnd.onChange }}" oninput="{{ bnd.onChange }}" style="flex:1;min-width:0;">
+                <span style="width:40px;text-align:right;font-size:11px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ bnd.display }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showTimingPanel }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:84px;left:20px;z-index:30;width:360px;max-width:calc(100% - 40px);background:#13131b;border:1px solid #2a2a36;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,0.5);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#8a8a99;font-weight:600;">Timing</div>
+            <button onClick="{{ closePanels }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:13px;">Close ×</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button onClick="{{ setRaw }}" style="flex:1;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-weight:500;font-size:13px;padding:10px;border-radius:9px;background:{{ rawBg }};color:{{ rawFg }};">Raw feel</button>
+            <button onClick="{{ setSnap }}" style="flex:1;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-weight:500;font-size:13px;padding:10px;border-radius:9px;background:{{ quantBg }};color:{{ quantFg }};">Snap to grid</button>
+          </div>
+          <sc-if value="{{ showGridSel }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <span style="font-size:12.5px;color:#b8b8c6;white-space:nowrap;">Grid</span>
+              <select class="inst" value="{{ gridVal }}" onChange="{{ setGrid }}" style="flex:1;">
+                <sc-for list="{{ gridOptions }}" as="g" hint-placeholder-count="6">
+                  <option value="{{ g.key }}">{{ g.name }}</option>
+                </sc-for>
+              </select>
+            </div>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <span style="font-size:13px;color:#b8b8c6;">Playback tempo</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#8a8a99;">{{ bpm }} BPM</span>
+          </div>
+          <input type="range" min="40" max="220" step="1" value="{{ bpm }}" onChange="{{ setBpm }}" oninput="{{ setBpm }}" style="width:100%;margin-bottom:10px;">
+          <button onClick="{{ onTapTempo }}" style="width:100%;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-weight:500;font-size:12.5px;padding:9px;border-radius:9px;background:#16161e;color:#d8d8e0;margin-bottom:16px;">Tap tempo {{ tapHint }}</button>
+          <button onClick="{{ toggleMetro }}" style="width:100%;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-weight:500;font-size:13px;padding:11px;border-radius:9px;background:{{ metroBg }};color:{{ metroFg }};display:flex;align-items:center;justify-content:center;gap:8px;"><span style="font-size:15px;">♩</span> Metronome {{ metroState }}</button>
+          <div style="font-size:11.5px;color:#5a5a68;line-height:1.5;margin-top:12px;">Notes are stored in beats — changing tempo re-times the whole song. Original recordings play at their natural speed.</div>
+        </div>
+      </sc-if>
+
+      <div style="position:relative;margin-top:16px;">
+      <div class="tl" ref="{{ scrollRef }}" style="display:flex;background:#0d0d12;border:1px solid #1a1a24;border-radius:12px;overflow-x:auto;overflow-y:hidden;align-items:flex-start;">
+        <div style="width:288px;flex:none;position:sticky;left:0;z-index:2;background:#0d0d12;border-right:1px solid #1f1f2a;">
+          <div style="height:24px;display:flex;align-items:center;padding:0 11px;font-size:9px;letter-spacing:.1em;color:#4a4a56;font-family:'JetBrains Mono',monospace;">TRACK · ● REC · SOLO · MUTE · ⚙</div>
+          <sc-for list="{{ lanesView }}" as="ln" hint-placeholder-count="4">
+            <div style="height:66px;border-top:1px solid rgba(255,255,255,0.05);padding:0 9px;display:flex;align-items:center;gap:7px;background:{{ ln.rowBg }};">
+              <span style="width:10px;height:10px;border-radius:3px;background:{{ ln.color }};flex:none;"></span>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                <span style="font-size:12px;font-weight:600;color:#e2e2ea;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ln.tag }} · {{ ln.soundName }}</span>
+                <sc-if value="{{ ln.showToggle }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:4px;">
+                    <button onClick="{{ ln.playExtract }}" title="Play the extracted instrument" style="border:1px solid {{ ln.extBorder }};cursor:pointer;font-family:inherit;font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:5px;background:{{ ln.extBg }};color:{{ ln.extFg }};">Extract</button>
+                    <button onClick="{{ ln.playOriginal }}" title="Play the original beatbox recording" style="border:1px solid {{ ln.origBorder }};cursor:pointer;font-family:inherit;font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:5px;background:{{ ln.origBg }};color:{{ ln.origFg }};">Original</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ln.isMaster }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:9px;letter-spacing:.08em;color:#c0a8ff;text-transform:uppercase;font-weight:700;">★ Master · original audio</span>
+                </sc-if>
+                <sc-if value="{{ ln.noAudio }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:9px;letter-spacing:.08em;color:{{ ln.typeColor }};text-transform:uppercase;">{{ ln.typeLabel }} · no recording</span>
+                </sc-if>
+              </div>
+              <button onClick="{{ ln.onRec }}" title="Record a beatbox into this track" style="border:1px solid {{ ln.recBorder }};cursor:pointer;font-family:inherit;width:26px;height:26px;border-radius:7px;background:{{ ln.recBg }};flex:none;display:flex;align-items:center;justify-content:center;"><span style="width:11px;height:11px;border-radius:50%;background:{{ ln.recDotColor }};{{ ln.recDotAnim }}"></span></button>
+              <button onClick="{{ ln.onSolo }}" title="Solo" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;width:26px;height:26px;border-radius:7px;background:{{ ln.soloBg }};color:{{ ln.soloFg }};flex:none;">S</button>
+              <button onClick="{{ ln.onMute }}" title="Mute" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;width:26px;height:26px;border-radius:7px;background:{{ ln.muteBg }};color:{{ ln.muteFg }};flex:none;">M</button>
+              <button onClick="{{ ln.onToggle }}" title="Track settings" style="border:1px solid {{ ln.plusBorder }};cursor:pointer;font-family:inherit;font-size:15px;line-height:1;width:26px;height:26px;border-radius:7px;background:{{ ln.plusBg }};color:{{ ln.plusFg }};flex:none;">{{ ln.plusIcon }}</button>
+            </div>
+          </sc-for>
+          <div style="height:42px;border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;padding:0 9px;gap:8px;">
+            <button onClick="{{ addRow }}" style="flex:1;border:1px dashed #33333f;cursor:pointer;font-family:inherit;font-size:11px;font-weight:500;padding:6px 0;border-radius:7px;background:transparent;color:#8a8a99;">+ New track</button>
+          </div>
+        </div>
+        <canvas ref="{{ gridRef }}" onClick="{{ onGridClick }}" onMouseDown="{{ onGridDown }}" onDoubleClick="{{ onGridDouble }}" onContextMenu="{{ onGridContext }}" style="display:block;flex:none;cursor:crosshair;"></canvas>
+      </div>
+        <canvas ref="{{ playRef }}" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4;"></canvas>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:10px;">
+        <div style="font-size:12px;color:#5a5a68;">Hit <span style="color:#ff7a7a;">●</span> on a track to record a beatbox into it · click a row to add a hit · click a hit to remove · drag the <span style="color:#3dd6ff;">top ruler</span> to loop · click ruler to set <span style="color:#ff7a7a;">start</span> · <span style="color:#9a9aa8;">⚙</span> for track settings.</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onClick="{{ onClearAll }}" style="border:none;background:none;cursor:pointer;color:#6a6a78;font-family:inherit;font-size:12.5px;text-decoration:underline;">Clear all notes</button>
+        </div>
+      </div>
+
+      <sc-if value="{{ hasOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:fixed;left:0;right:0;bottom:0;z-index:45;background:#101017;border-top:1px solid #2a2a36;box-shadow:0 -16px 40px rgba(0,0,0,0.5);padding:14px 20px 18px;max-height:48vh;overflow-y:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <span style="width:11px;height:11px;border-radius:3px;background:{{ openView.color }};"></span>
+              <span style="font-size:13px;font-weight:600;">{{ openView.tag }} · {{ openView.soundName }} — settings</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button onClick="{{ openView.onDelete }}" style="border:1px solid #3a2a30;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;padding:7px 13px;border-radius:8px;background:transparent;color:#c98a92;">Delete track</button>
+              <button onClick="{{ openView.onClose }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:13px;">Close ×</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:{{ openView.gridCols }};gap:24px;align-items:start;">
+            <sc-if value="{{ openView.notMaster }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <label style="display:block;font-size:11px;color:#8a8a99;margin-bottom:6px;">{{ openView.soundLabel }}</label>
+              <div style="display:flex;gap:8px;align-items:stretch;">
+                <select class="inst" value="{{ openView.sound }}" onChange="{{ openView.onSound }}" style="flex:1;">
+                  <sc-for list="{{ openView.soundOptions }}" as="opt" hint-placeholder-count="6">
+                    <option value="{{ opt.key }}">{{ opt.name }}</option>
+                  </sc-for>
+                </select>
+                <button onClick="{{ openView.onTest }}" title="Hear this instrument" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:0 14px;border-radius:7px;background:#16161e;color:#48e08b;white-space:nowrap;">▸ Test</button>
+              </div>
+              <label style="display:block;font-size:11px;color:#8a8a99;margin:16px 0 11px;">Instrument EQ</label>
+              <div style="display:flex;flex-direction:column;gap:11px;">
+                <sc-for list="{{ openView.eqBands }}" as="bnd" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:11px;">
+                    <span style="width:46px;font-size:12px;color:#9a9aa8;flex:none;">{{ bnd.name }}</span>
+                    <input type="range" min="-15" max="15" step="1" value="{{ bnd.value }}" onChange="{{ bnd.onChange }}" oninput="{{ bnd.onChange }}" style="flex:1;min-width:0;">
+                    <span style="width:40px;text-align:right;font-size:11px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ bnd.display }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <div>
+              <label style="display:block;font-size:11px;color:#8a8a99;margin-bottom:8px;">Beatbox recording for this track</label>
+              <sc-if value="{{ openView.showWave }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <canvas ref="{{ waveRef }}" onMouseDown="{{ onWaveDown }}" style="width:100%;height:96px;display:block;border-radius:10px;background:#0d0d12;border:1px solid #1a1a24;cursor:text;"></canvas>
+                  <sc-if value="{{ openView.capturing }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;">
+                      <div style="font-size:11.5px;color:#ff8a8a;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5d5d;animation:recpulse 1s infinite;margin-right:6px;"></span>Recording — beatbox now. Hits drop onto the grid live; final extraction runs on stop.</div>
+                      <button onClick="{{ openView.onRec }}" style="border:1px solid #ff5d5d;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:9px;background:#d63a3a;color:#fff;white-space:nowrap;">■ Stop recording</button>
+                    </div>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ openView.controlsReady }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <div style="font-size:11px;color:#5a5a68;margin:6px 0 0;">{{ openView.takeLen }}s recorded · drag to select a region · <span style="color:#48e08b;">green</span> = noise gate. Original is kept as backup.</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;">
+                    <div>
+                      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:12px;color:#b8b8c6;">Noise gate</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a8a99;">{{ openView.gate }}%</span></div>
+                      <input type="range" min="0" max="100" step="1" value="{{ openView.gate }}" onChange="{{ openView.onGate }}" oninput="{{ openView.onGate }}" style="width:100%;margin-bottom:7px;">
+                      <button onClick="{{ openView.onCalibrate }}" style="width:100%;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:500;padding:7px;border-radius:8px;background:#16161e;color:#d8d8e0;">Calibrate from silence</button>
+                    </div>
+                    <div>
+                      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:12px;color:#b8b8c6;">High-pass</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a8a99;">{{ openView.hp }} Hz</span></div>
+                      <input type="range" min="20" max="400" step="5" value="{{ openView.hp }}" onChange="{{ openView.onHp }}" oninput="{{ openView.onHp }}" style="width:100%;margin-bottom:7px;">
+                      <div style="display:flex;gap:7px;">
+                        <button onClick="{{ openView.onTrim }}" style="flex:1;border:1px solid #26262f;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:500;padding:7px;border-radius:8px;background:#16161e;color:#d8d8e0;">Trim ends</button>
+                        <button onClick="{{ openView.onDeleteSel }}" style="flex:1;border:1px solid #3a2a30;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:500;padding:7px;border-radius:8px;background:transparent;color:#c98a92;">Delete sel.</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:9px;margin-top:14px;flex-wrap:wrap;">
+                    <button onClick="{{ openView.onReExtract }}" style="border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;padding:10px 18px;border-radius:9px;background:#48e08b;color:#06291a;">↻ Re-extract {{ openView.extractKind }}</button>
+                    <button onClick="{{ openView.onDetectTempo }}" style="border:1px solid #26262f;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;padding:10px 14px;border-radius:9px;background:#16161e;color:#d8d8e0;">Set tempo from this</button>
+                    <button onClick="{{ openView.onPreviewOrig }}" style="border:1px solid #26262f;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;padding:10px 14px;border-radius:9px;background:#16161e;color:#d8d8e0;">▶ Preview original</button>
+                    <div style="flex:1;"></div>
+                    <button onClick="{{ openView.onRec }}" style="border:1px solid {{ openView.recBorder }};cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:10px 16px;border-radius:9px;background:{{ openView.recBg2 }};color:{{ openView.recFg2 }};">{{ openView.recLabel }}</button>
+                    <button onClick="{{ openView.onDeleteRec }}" style="border:1px solid #3a2a30;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;padding:10px 14px;border-radius:9px;background:transparent;color:#c98a92;">Delete recording</button>
+                  </div>
+                </div>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{ openView.showEmpty }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#0d0d12;border:1px dashed #2a2a36;border-radius:10px;padding:22px;text-align:center;">
+                  <div style="font-size:13px;color:#9a9aa8;margin-bottom:14px;line-height:1.5;">No recording yet. Beatbox a part for this track, then extract it into {{ openView.extractKind }}.</div>
+                  <button onClick="{{ openView.onRec }}" style="border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;padding:12px 24px;border-radius:10px;background:{{ openView.recBg2 }};color:{{ openView.recFg2 }};display:inline-flex;align-items:center;gap:9px;"><span style="width:12px;height:12px;border-radius:50%;background:{{ openView.recFg2 }};{{ openView.recDotAnim }}"></span>{{ openView.recLabel }}</button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <p style="color:#4a4a56;font-size:12px;line-height:1.6;margin:14px 4px 0;text-align:center;">Each track holds its own beatbox recording (kept as backup) plus the instrument extracted from it — switch with Original / Extract. The <span style="color:#7a7a88;">.mid</span> export carries the extracted notes, one track each; original audio stays here. Mic never leaves your browser.</p>
+
+    <sc-if value="{{ groovesOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onToggleGrooves }}" style="position:fixed;inset:0;z-index:70;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div onClick="{{ stopProp }}" style="width:min(560px,100%);max-height:80vh;overflow-y:auto;background:#101017;border:1px solid #2a2a36;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.6);padding:20px 22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:15px;font-weight:700;color:#e8e8ef;">Saved grooves</span>
+            <button onClick="{{ onToggleGrooves }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:13px;">Close ×</button>
+          </div>
+          <p style="font-size:11.5px;color:#5a5a68;margin:0 0 16px;line-height:1.5;">Saved on this device with the original audio. They upload to your computer automatically when it's reachable on the same WiFi.</p>
+          <button onClick="{{ onSaveGroove }}" style="width:100%;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;padding:12px;border-radius:10px;background:#48e08b;color:#06291a;margin-bottom:16px;">＋ Save current groove</button>
+          <sc-if value="{{ hasGrooves }}" hint-placeholder-val="{{ true }}">
+            <sc-for list="{{ groovesView }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid #20202a;border-radius:11px;margin-bottom:9px;background:#0d0d12;">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:600;color:#e8e8ef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ g.name }}</div>
+                  <div style="font-size:11px;color:#6a6a78;margin-top:3px;">{{ g.meta }}</div>
+                  <div style="font-size:10.5px;color:{{ g.statusColor }};margin-top:4px;font-weight:600;">{{ g.status }}</div>
+                </div>
+                <button onClick="{{ g.onLoad }}" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;background:#16161e;color:#d8d8e0;flex:none;">Open</button>
+              </div>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ noGrooves }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;color:#5a5a68;font-size:12.5px;padding:18px 0;">No saved grooves yet — record something, then hit Save.</div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ soundsOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onToggleSounds }}" style="position:fixed;inset:0;z-index:70;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div onClick="{{ stopProp }}" style="width:min(600px,100%);max-height:84vh;overflow-y:auto;background:#101017;border:1px solid #2a2a36;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.6);padding:20px 22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:15px;font-weight:700;color:#e8e8ef;">My Sounds</span>
+            <button onClick="{{ onToggleSounds }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:13px;">Close ×</button>
+          </div>
+          <p style="font-size:11.5px;color:#5a5a68;margin:0 0 12px;line-height:1.5;">Your own recorded sounds, kept on this device. Edit each one (trim, base pitch, gain, loop) and use it as an instrument on any track — pick it from a track's sound list as "My — …".</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #20202a;border-radius:10px;padding:9px 12px;margin-bottom:16px;background:#0d0d12;">
+            <span style="font-size:11.5px;color:#9a9aa8;line-height:1.4;">When you record a whole groove, split it into these sounds (match each hit).</span>
+            <button onClick="{{ onToggleMatch }}" style="border:1px solid {{ matchBorder }};cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:7px 12px;border-radius:8px;background:{{ matchBg }};color:{{ matchFg }};white-space:nowrap;flex:none;">{{ matchLabel }}</button>
+          </div>
+          <button onClick="{{ onSoundRec }}" style="width:100%;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;padding:12px;border-radius:10px;background:{{ soundRecBg }};color:{{ soundRecFg }};margin-bottom:16px;">{{ soundRecLabel }}</button>
+
+          <sc-if value="{{ soundEditing }}" hint-placeholder-val="{{ true }}">
+            <div style="border:1px solid #2a2a36;border-radius:12px;padding:13px;margin-bottom:16px;background:#0d0d12;">
+              <input type="text" value="{{ soundEditView.name }}" onChange="{{ soundEditView.onName }}" style="width:100%;box-sizing:border-box;background:#16161e;border:1px solid #2a2a36;border-radius:8px;color:#e8e8ef;font-family:inherit;font-size:13px;font-weight:600;padding:8px 10px;margin-bottom:10px;">
+              <canvas ref="{{ galWaveRef }}" onMouseDown="{{ onSoundWaveDown }}" style="width:100%;height:90px;display:block;border-radius:10px;background:#0d0d12;border:1px solid #1a1a24;cursor:text;"></canvas>
+              <div style="font-size:10.5px;color:#5a5a68;margin:6px 0 12px;">drag on the wave to set the kept region · trim {{ soundEditView.trimLabel }}</div>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+                <span style="width:74px;font-size:11px;color:#9a9aa8;flex:none;">Base pitch</span>
+                <input type="range" min="36" max="84" step="1" value="{{ soundEditView.base }}" onChange="{{ soundEditView.onBase }}" oninput="{{ soundEditView.onBase }}" style="flex:1;min-width:0;">
+                <span style="width:46px;text-align:right;font-size:11px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ soundEditView.baseLabel }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">
+                <span style="width:74px;font-size:11px;color:#9a9aa8;flex:none;">Gain</span>
+                <input type="range" min="10" max="200" step="1" value="{{ soundEditView.gain }}" onChange="{{ soundEditView.onGain }}" oninput="{{ soundEditView.onGain }}" style="flex:1;min-width:0;">
+                <span style="width:46px;text-align:right;font-size:11px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ soundEditView.gainLabel }}</span>
+              </div>
+              <div style="display:flex;gap:9px;">
+                <button onClick="{{ soundEditView.onPreview }}" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:8px;background:#16161e;color:#48e08b;">▸ Preview</button>
+                <button onClick="{{ soundEditView.onLoop }}" title="Loop a middle region so long notes can sustain" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:8px;background:#16161e;color:#d8d8e0;">{{ soundEditView.loopLabel }}</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ hasSounds }}" hint-placeholder-val="{{ true }}">
+            <sc-for list="{{ soundsView }}" as="sn" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #20202a;border-radius:11px;margin-bottom:9px;background:#0d0d12;">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:600;color:#e8e8ef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sn.name }}</div>
+                  <div style="font-size:11px;color:#6a6a78;margin-top:3px;">{{ sn.meta }}</div>
+                </div>
+                <button onClick="{{ sn.onPreview }}" title="Preview" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;background:#16161e;color:#48e08b;flex:none;">▸</button>
+                <button onClick="{{ sn.onEdit }}" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:7px 13px;border-radius:8px;background:#16161e;color:#d8d8e0;flex:none;">Edit</button>
+                <button onClick="{{ sn.onDelete }}" style="border:1px solid #3a2a30;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;background:transparent;color:#c98a92;flex:none;">✕</button>
+              </div>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ noSounds }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;color:#5a5a68;font-size:12.5px;padding:18px 0;">No sounds yet — tap "Record a sound" to build your gallery.</div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ hasSyncMsg }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;background:#16161e;border:1px solid #2a2a36;color:#d8d8e0;font-size:12.5px;padding:9px 16px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.4);">{{ syncMsg }}</div>
+    </sc-if>
+
+    <!-- Bottom-right corner: minimap (your location on the grid) + zoom. Hidden until you hover the corner. -->
+    <div onMouseEnter="{{ openCorner }}" onMouseLeave="{{ closeCorner }}" style="position:fixed;right:0;bottom:0;z-index:41;padding:0 12px 12px 26px;">
+      <sc-if value="{{ cornerOpen }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+          <canvas ref="{{ minimapRef }}" onMouseDown="{{ onMinimapDown }}" title="Your location on the grid — click or drag to move" style="width:172px;height:62px;display:block;border-radius:10px;background:rgba(13,13,18,0.94);border:1px solid #2a2a36;box-shadow:0 8px 24px rgba(0,0,0,0.5);cursor:pointer;"></canvas>
+          <div style="display:flex;align-items:center;gap:6px;background:rgba(16,16,22,0.94);border:1px solid #2a2a36;border-radius:12px;padding:6px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.45);">
+            <span style="font-size:10px;color:#5a5a68;font-family:'JetBrains Mono',monospace;padding-left:2px;">zoom</span>
+            <button onClick="{{ zoomOut }}" title="Zoom out" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:16px;line-height:1;width:30px;height:28px;border-radius:7px;">−</button>
+            <button onClick="{{ zoomReset }}" title="Reset zoom" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#9a9aa8;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;min-width:46px;height:28px;border-radius:7px;">{{ zoomPct }}</button>
+            <button onClick="{{ zoomIn }}" title="Zoom in" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:16px;line-height:1;width:30px;height:28px;border-radius:7px;">+</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ cornerClosed }}" hint-placeholder-val="{{ false }}">
+        <div title="Map &amp; zoom" style="width:34px;height:34px;border-radius:9px;background:rgba(16,16,22,0.7);border:1px solid #2a2a36;display:flex;align-items:center;justify-content:center;color:#7a7a88;font-size:16px;cursor:pointer;">⊞</div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ noteMenuShown }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeNoteMenu }}" style="position:fixed;inset:0;z-index:60;">
+        <div onClick="{{ stopProp }}" style="position:fixed;left:{{ noteView.x }}px;top:{{ noteView.y }}px;transform:translate(-50%,12px);background:#13131b;border:1px solid #2a2a36;border-radius:13px;padding:13px 14px;box-shadow:0 18px 50px rgba(0,0,0,0.6);width:236px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;">
+            <span style="font-size:12px;font-weight:700;color:#e8e8ef;">{{ noteView.title }} · EQ</span>
+            <button onClick="{{ closeNoteMenu }}" style="border:none;background:none;cursor:pointer;color:#7a7a88;font-family:inherit;font-size:12px;">Close ×</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;">
+            <span style="font-size:11px;color:#8a8a99;">{{ noteView.toneName }}</span>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <button onClick="{{ adjDownOct }}" title="Down an octave" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:12px;font-weight:600;width:30px;height:28px;border-radius:7px;">⏬</button>
+              <button onClick="{{ adjDown }}" title="Down a semitone" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:15px;font-weight:700;width:30px;height:28px;border-radius:7px;">−</button>
+              <span style="min-width:54px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#48e08b;">{{ noteView.toneLabel }}</span>
+              <button onClick="{{ adjUp }}" title="Up a semitone" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:15px;font-weight:700;width:30px;height:28px;border-radius:7px;">+</button>
+              <button onClick="{{ adjUpOct }}" title="Up an octave" style="border:1px solid #2a2a36;cursor:pointer;background:#16161e;color:#d8d8e0;font-family:inherit;font-size:12px;font-weight:600;width:30px;height:28px;border-radius:7px;">⏫</button>
+            </div>
+          </div>
+          <div style="height:1px;background:#22222c;margin:0 0 11px;"></div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+            <span style="width:48px;font-size:11px;color:#9a9aa8;flex:none;">Bass</span>
+            <input type="range" min="-15" max="15" step="1" value="{{ noteView.bass }}" onChange="{{ onBeatBass }}" oninput="{{ onBeatBass }}" style="flex:1;min-width:0;">
+            <span style="width:40px;text-align:right;font-size:10.5px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ noteView.bassD }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+            <span style="width:48px;font-size:11px;color:#9a9aa8;flex:none;">Mid</span>
+            <input type="range" min="-15" max="15" step="1" value="{{ noteView.mid }}" onChange="{{ onBeatMid }}" oninput="{{ onBeatMid }}" style="flex:1;min-width:0;">
+            <span style="width:40px;text-align:right;font-size:10.5px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ noteView.midD }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+            <span style="width:48px;font-size:11px;color:#9a9aa8;flex:none;">Treble</span>
+            <input type="range" min="-15" max="15" step="1" value="{{ noteView.treble }}" onChange="{{ onBeatTreble }}" oninput="{{ onBeatTreble }}" style="flex:1;min-width:0;">
+            <span style="width:40px;text-align:right;font-size:10.5px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ noteView.trebleD }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;">
+            <span style="width:48px;font-size:11px;color:#9a9aa8;flex:none;">Volume</span>
+            <input type="range" min="5" max="130" step="1" value="{{ noteView.vol }}" onChange="{{ onBeatVol }}" oninput="{{ onBeatVol }}" style="flex:1;min-width:0;">
+            <span style="width:40px;text-align:right;font-size:10.5px;color:#7a7a88;font-family:'JetBrains Mono',monospace;flex:none;">{{ noteView.volD }}</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ micErrorShown }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,0.78);padding:20px;">
+        <div style="max-width:460px;background:#13131b;border:1px solid #3a2a30;border-radius:16px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;">
+            <span style="font-size:30px;">🎤</span>
+            <span style="font-size:18px;font-weight:700;color:#fff;">Microphone is blocked</span>
+          </div>
+          <sc-if value="{{ micErrorBlocked }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:14px;color:#c8c8d2;line-height:1.6;margin-bottom:18px;">Your browser is blocking mic access for this page, so recording can't start. To fix it:<br><br>1. Click the <strong style="color:#fff;">🔒 lock</strong> (or 🎤) icon in the address bar.<br>2. Set <strong style="color:#fff;">Microphone → Allow</strong>.<br>3. <strong style="color:#fff;">Reload</strong> the page, then press record again.</div>
+          </sc-if>
+          <sc-if value="{{ micErrorNoDevice }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:14px;color:#c8c8d2;line-height:1.6;margin-bottom:18px;">No microphone was found. Plug in or enable a mic, then try again.</div>
+          </sc-if>
+          <sc-if value="{{ micErrorOther }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:14px;color:#c8c8d2;line-height:1.6;margin-bottom:18px;">Couldn't start the microphone. Make sure no other app is using it, then try again.</div>
+          </sc-if>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button onClick="{{ dismissMicError }}" style="border:1px solid #2a2a36;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;padding:10px 18px;border-radius:9px;background:transparent;color:#9a9aa8;">Close</button>
+            <button onClick="{{ retryMic }}" style="border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;padding:10px 20px;border-radius:9px;background:#48e08b;color:#06291a;">Try again</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ countdownShown }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ cancelCountdown }}" style="position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,0.72);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <div style="width:150px;height:150px;border-radius:50%;border:3px solid #ff5d5d;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:78px;font-weight:700;color:#fff;box-shadow:0 0 60px rgba(255,93,93,0.4);">{{ countdown }}</div>
+          <div style="font-size:14px;color:#9a9aa8;font-family:'Space Grotesk',sans-serif;">Get ready to beatbox… <span style="color:#6a6a78;">(click to cancel)</span></div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  gridRef = React.createRef();
+  scrollRef = React.createRef();
+  levelRef = React.createRef();
+  waveRef = React.createRef();
+  galWaveRef = React.createRef();
+  minimapRef = React.createRef();
+  playRef = React.createRef();
+  cMin = 1e9; cMax = -1e9;
+  lastOnset = 0; armed = true; _noise = null;
+  recStartAC = 0; recStartBeat = 0; playStartAC = 0; playStartBeat = 0; playheadBeat = null;
+  _basePPB = 64; LANE_H = 66; RULER = 24; VOL_STRIP = 22;
+  get PPB(){ return Math.round(this._basePPB*(this.state?this.state.zoom||1:1)); }
+  laneNodes = {};
+  _hist = { past: [], future: [] };
+  _taps = [];
+  _audioBuf = {};   // laneId -> { raw:Float32Array, sr, ab, abKey }
+  _activeAudio = [];
+  ANALYSIS_SR = 16000;
+  MASTER_MAX = 16;
+  _colors = ['#ff5d5d','#ffb13d','#3dd6ff','#7c5cff','#48e08b','#ff6fd8','#ffd24d','#5cd6c0','#c08cff','#ff8c5c'];
+  DRUMS = [
+    {key:'kick',name:'Kick',note:36},{key:'snare',name:'Snare',note:38},{key:'rim',name:'Rimshot',note:37},
+    {key:'clap',name:'Clap',note:39},{key:'tomL',name:'Tom — low',note:45},{key:'tomM',name:'Tom — mid',note:47},
+    {key:'tomH',name:'Tom — high',note:50},{key:'hat',name:'Hi-hat (closed)',note:42},{key:'openhat',name:'Hi-hat (open)',note:46},
+    {key:'cymbal',name:'Cymbal',note:49},{key:'cowbell',name:'Cowbell',note:56},
+    {key:'808',name:'808 sub',note:35},{key:'shaker',name:'Shaker',note:70},{key:'congaH',name:'Conga hi',note:62},{key:'congaL',name:'Conga lo',note:64}
+  ];
+  WAVES = [{key:'pluck',name:'Pluck'},{key:'bass',name:'Synth bass'},{key:'pad',name:'Warm pad'},{key:'lead',name:'Saw lead'},{key:'bell',name:'Bell'},{key:'organ',name:'Organ'},{key:'sine',name:'Sine (pure)'},{key:'triangle',name:'Triangle (soft)'},{key:'square',name:'Square (hollow)'},{key:'sawtooth',name:'Saw (raw)'}];
+
+  _uid(p){ return (p||'x')+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  _colorAt(i){ return i<this._colors.length ? this._colors[i] : 'hsl('+((i*53)%360)+',68%,62%)'; }
+  _mkLane(type, sound){ return { id:this._uid('l'), type, sound: sound || (type==='synth'?'sine':'kick'), muted:false, solo:false, eq:{low:0,mid:0,high:0} }; }
+  _defaultLanes(){ return [ this._mkLane('drum','kick'), this._mkLane('drum','snare'), this._mkLane('drum','hat') ]; }
+
+  state = (() => {
+    const d = { playing:false, paused:false, liveOn:false, micOn:false, capLaneId:null,
+      bpm:90, quantize:false, grid:4, metronome:false, sens:80,
+      loopOn:false, loopStart:null, loopEnd:null, startAt:0,
+      grooves:[], groovesOpen:false, syncOnline:false, syncMsg:'',
+      mySounds:[], soundsOpen:false, soundEdit:null, soundRec:false, matchSounds:true, cornerOpen:false,
+      lanes:null, events:[], openLane:null, noteMenu:null,
+      micEq:{low:0,mid:0,high:0}, audio:{}, canUndo:false, canRedo:false, selected:[],
+      evCount:0, outputMuted:false, zoom:1, panel:null, countdown:null, micError:null };
+    let loaded=null;
+    try { loaded = JSON.parse(localStorage.getItem('bbm4')||'null'); } catch(e){}
+    if (!loaded || !Array.isArray(loaded.lanes) || !loaded.lanes.length) {
+      // migrate from the previous version so existing work isn't lost
+      try { const old = JSON.parse(localStorage.getItem('bbm3')||'null'); if (old && Array.isArray(old.lanes) && old.lanes.length) loaded = old; } catch(e){}
+    }
+    if (loaded) Object.assign(d, loaded);
+    d.playing=false; d.paused=false; d.liveOn=false; d.micOn=false; d.openLane=null; d.capLaneId=null; d.audio={};
+    if (Array.isArray(d.lanes)) d.lanes = d.lanes.filter(l=>l.type!=='audio'&&l.type!=='master').map(l=>({ id:l.id||this._uid('l'), type:l.type||'drum', sound:l.sound||(l.type==='synth'?'sine':'kick'), muted:!!l.muted, solo:!!l.solo, eq:l.eq||{low:0,mid:0,high:0} }));
+    if (!Array.isArray(d.lanes) || !d.lanes.length) d.lanes = this._defaultLanes();
+    if (!Array.isArray(d.events)) d.events = [];
+    if (!d.micEq) d.micEq={low:0,mid:0,high:0};
+    d.events = d.events.filter(e=>!e.isAudio);
+    d.evCount = d.events.length;
+    return d;
+  })();
+
+  componentDidMount(){
+    this.grid=this.gridRef.current;
+    this._recomputeRange(); this._redraw();
+    this._onResize=()=>{ this._redraw(); this._drawWave(); };
+    window.addEventListener('resize', this._onResize);
+    this._onKey=(e)=>{ const k=e.key.toLowerCase(); const tg=(e.target&&e.target.tagName)||''; if(tg==='INPUT'||tg==='SELECT'||tg==='TEXTAREA') return;
+      if((e.ctrlKey||e.metaKey)&&k==='z'){ e.preventDefault(); e.shiftKey?this.onRedo():this.onUndo(); }
+      else if((e.ctrlKey||e.metaKey)&&k==='y'){ e.preventDefault(); this.onRedo(); }
+      else if(k===' '){ e.preventDefault(); this.onPlay(); } };
+    window.addEventListener('keydown', this._onKey);
+    const sc=this.scrollRef.current;
+    if(sc){ this._onWheel=(e)=>{ if(e.shiftKey){ const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY; if(d!==0){ sc.scrollLeft+=d; e.preventDefault(); } } };
+      sc.addEventListener('wheel', this._onWheel, {passive:false});
+      this._onScroll=()=>{ if(!this._mmActive) this._locFromView(); this._drawPlayhead(); if(this.state.cornerOpen) this._drawMinimap(); }; sc.addEventListener('scroll', this._onScroll);
+      this._onWinScroll=()=>{ if(this._mmActive||!this.state.cornerOpen) return; this._locFromView(); this._drawPlayhead(); this._drawMinimap(); }; window.addEventListener('scroll', this._onWinScroll, {passive:true}); }
+    this._refreshGrooves(); this._syncNow(); this._loadSounds(); this._syncInt=setInterval(()=>this._syncNow(),15000);
+    this._onOnline=()=>this._syncNow(); window.addEventListener('online', this._onOnline);
+  }
+  componentWillUnmount(){ window.removeEventListener('resize',this._onResize); window.removeEventListener('keydown',this._onKey); const sc=this.scrollRef.current; if(sc&&this._onWheel) sc.removeEventListener('wheel',this._onWheel); if(this._onWinScroll) window.removeEventListener('scroll',this._onWinScroll); if(this._syncInt) clearInterval(this._syncInt); if(this._onOnline) window.removeEventListener('online',this._onOnline); this._stopAll(); }
+  componentDidUpdate(){
+    this._redraw();
+    if(this.state.syncMsg && this.state.syncMsg!==this._lastToast){ this._lastToast=this.state.syncMsg; clearTimeout(this._toastT); this._toastT=setTimeout(()=>{ if(this.state.syncMsg===this._lastToast) this.setState({syncMsg:''}); },4000); }
+    clearTimeout(this._sv);
+    this._sv=setTimeout(()=>{ const s=this.state;
+      try{ localStorage.setItem('bbm4', JSON.stringify({ bpm:s.bpm, quantize:s.quantize, metronome:s.metronome, sens:s.sens, loopOn:s.loopOn, loopStart:s.loopStart, loopEnd:s.loopEnd, startAt:s.startAt, lanes:s.lanes.filter(l=>l.type!=='master'&&l.type!=='audio'), events:s.events, micEq:s.micEq })); }catch(e){}
+    },300);
+  }
+
+  _recomputeRange(){ let lo=1e9,hi=-1e9; this.state.events.forEach(e=>{ if(e.centroid!=null){ if(e.centroid<lo)lo=e.centroid; if(e.centroid>hi)hi=e.centroid; } }); if(hi>lo){ this.cMin=lo; this.cMax=hi; } }
+  _laneById(id){ return this.state.lanes.find(l=>l.id===id); }
+  _laneIndex(id){ return this.state.lanes.findIndex(l=>l.id===id); }
+  _drumLanes(){ return this.state.lanes.filter(l=>l.type==='drum'); }
+  _midiToHz(m){ return 440*Math.pow(2,(m-69)/12); }
+  _hzToMidi(f){ return Math.round(69+12*Math.log2(f/440)); }
+  _noteName(m){ const n=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']; return n[((m%12)+12)%12]+(Math.floor(m/12)-1); }
+
+  /* ---------- audio core ---------- */
+  ensureAC(){ if(this.ac) return Promise.resolve(); this.ac=new (window.AudioContext||window.webkitAudioContext)();
+    const b=this.ac.createBuffer(1,this.ac.sampleRate,this.ac.sampleRate); const d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; this.noise=b;
+    this._sink=this.ac.createGain(); this._sink.gain.value=0; this._sink.connect(this.ac.destination);
+    this._master=this.ac.createGain(); this._master.gain.value=this.state.outputMuted?0:1; this._master.connect(this.ac.destination);
+    this._voiceBus=this.ac.createGain(); this._voiceBus.connect(this._master); return Promise.resolve(); }
+  /* Load the capture AudioWorklet once (runs sample-grabbing off the main thread; replaces the deprecated ScriptProcessorNode). Module is delivered via a Blob URL so it needs no extra served file. */
+  _ensureWorklet(){ if(this._workletReady) return this._workletReady;
+    if(!this.ac||!this.ac.audioWorklet){ this._workletReady=Promise.reject(new Error('no audioWorklet')); return this._workletReady; }
+    const code="class C extends AudioWorkletProcessor{constructor(o){super();this._b=(o.processorOptions&&o.processorOptions.block)||4096;this._buf=new Float32Array(this._b);this._n=0;}process(inputs){const ch=inputs[0]&&inputs[0][0];if(ch){for(let i=0;i<ch.length;i++){this._buf[this._n++]=ch[i];if(this._n>=this._b)this._flush();}}return true;}_flush(){const out=this._buf.slice(0,this._n);this._n=0;this.port.postMessage(out,[out.buffer]);}}registerProcessor('dc-capture',C);";
+    const url=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
+    this._workletReady=this.ac.audioWorklet.addModule(url).then(()=>{ URL.revokeObjectURL(url); });
+    return this._workletReady; }
+  /* Build a capture node wired to feed _capChunks + _liveEnv exactly like the old onaudioprocess handler did. */
+  _makeCaptureNode(){ const node=new AudioWorkletNode(this.ac,'dc-capture',{numberOfInputs:1,numberOfOutputs:1,channelCount:1,processorOptions:{block:4096}});
+    node.port.onmessage=(ev)=>{ const dd=ev.data; this._capChunks.push(dd); const seg=Math.floor(dd.length/4)||1; for(let k=0;k<4;k++){ let pk=0; for(let i=k*seg;i<(k+1)*seg&&i<dd.length;i++){ const v=Math.abs(dd[i]); if(v>pk)pk=v; } this._liveEnv.push(pk); } };
+    return node; }
+  async ensureMic(){ if(this.analyser) return;
+    const stream=this.micStream||await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); this.micStream=stream;
+    await this.ensureAC(); if(this.ac.state==='suspended'){ try{ await this.ac.resume(); }catch(e){} }
+    try{ await this._ensureWorklet(); }catch(e){}
+    const src=this.ac.createMediaStreamSource(stream); this.micSrc=src;
+    this.boost=this.ac.createGain(); this.boost.gain.value=3.2;
+    const me=this.state.micEq||{low:0,mid:0,high:0};
+    this.micLow=this.ac.createBiquadFilter(); this.micLow.type='lowshelf'; this.micLow.frequency.value=220; this.micLow.gain.value=me.low;
+    this.micMid=this.ac.createBiquadFilter(); this.micMid.type='peaking'; this.micMid.frequency.value=1000; this.micMid.Q.value=0.9; this.micMid.gain.value=me.mid;
+    this.micHigh=this.ac.createBiquadFilter(); this.micHigh.type='highshelf'; this.micHigh.frequency.value=3800; this.micHigh.gain.value=me.high;
+    this.analyser=this.ac.createAnalyser(); this.analyser.fftSize=1024; this.analyser.smoothingTimeConstant=0.08;
+    src.connect(this.boost); this.boost.connect(this.micLow); this.micLow.connect(this.micMid); this.micMid.connect(this.micHigh); this.micHigh.connect(this.analyser);
+    this.timeBuf=new Float32Array(this.analyser.fftSize); this.freqBuf=new Float32Array(this.analyser.frequencyBinCount); }
+  _floor(){ const x=1-this.state.sens/100; return 0.0045+0.16*x*x; }
+
+  ensureLaneNodes(){ if(!this.ac) return; const bus=this._voiceBus||this._master||this.ac.destination; this.state.lanes.forEach(l=>{ if(!this.laneNodes[l.id]){
+      const low=this.ac.createBiquadFilter(); low.type='lowshelf'; low.frequency.value=220;
+      const mid=this.ac.createBiquadFilter(); mid.type='peaking'; mid.frequency.value=1000; mid.Q.value=0.9;
+      const high=this.ac.createBiquadFilter(); high.type='highshelf'; high.frequency.value=3800;
+      const input=this.ac.createGain(); input.connect(low); low.connect(mid); mid.connect(high); high.connect(bus);
+      this.laneNodes[l.id]={input,low,mid,high}; }
+      const eq=l.eq||{low:0,mid:0,high:0}; this.laneNodes[l.id].low.gain.value=eq.low; this.laneNodes[l.id].mid.gain.value=eq.mid; this.laneNodes[l.id].high.gain.value=eq.high; }); this._applyLaneGains(); }
+  _applyLaneGains(){ if(!this.ac) return; this.state.lanes.forEach(l=>{ const nd=this.laneNodes[l.id]; if(nd) nd.input.gain.value=this._audible(l)?1:0; }); }
+  _clearLaneNodes(){ Object.values(this.laneNodes).forEach(nd=>{ try{nd.input.disconnect();nd.low.disconnect();nd.mid.disconnect();nd.high.disconnect();}catch(e){} }); this.laneNodes={}; }
+
+  /* instant silence: drop the voice bus so every scheduled note stops NOW */
+  _killVoices(){ this._stopAudio();
+    if(this._voiceBus){ try{this._voiceBus.disconnect();}catch(e){} }
+    if(this.ac){ this._voiceBus=this.ac.createGain(); this._voiceBus.connect(this._master); }
+    this._clearLaneNodes(); }
+  _stopAudio(){ this._activeAudio.forEach(s=>{ try{s.stop();}catch(e){} }); this._activeAudio=[]; }
+  toggleOutput=()=>this.setState(s=>{ const m=!s.outputMuted; if(this._master) this._master.gain.value=m?0:1; return {outputMuted:m}; });
+
+  _setMic(active){ this._micActive=active; if(active){ if(!this._micRAF) this._micRAF=requestAnimationFrame(this._micLoop); } else if(this.levelRef.current) this.levelRef.current.style.width='0%'; }
+  _micLoop=()=>{ if(!this._micActive||!this.analyser){ this._micRAF=null; return; } this._micRAF=requestAnimationFrame(this._micLoop);
+    this.analyser.getFloatTimeDomainData(this.timeBuf); let sum=0; for(let i=0;i<this.timeBuf.length;i++){ const v=this.timeBuf[i]; sum+=v*v; } const rms=Math.sqrt(sum/this.timeBuf.length);
+    if(this.levelRef.current) this.levelRef.current.style.width=Math.min(100,rms*260)+'%';
+    if(this._noise==null) this._noise=rms; this._noise=this._noise*0.992+rms*0.008;
+    const capId=this.state.capLaneId;
+    if(this.state.liveOn||capId){ const trig=Math.max(this._floor(), this._noise*2.4); const now=this.ac.currentTime;
+      if(this.armed&&rms>trig&&(now-this.lastOnset)>0.06){ this.armed=false; this.lastOnset=now; const c=this._centroid(); if(c<this.cMin)this.cMin=c; if(c>this.cMax)this.cMax=c; const vel=Math.max(0.4,Math.min(1,rms*2.6));
+        if(capId){ const lane=this._laneById(capId); if(lane){ const beat=this.recStartBeat+(now-this.recStartAC)*this.state.bpm/60; (this._liveEvents=this._liveEvents||[]).push({beat,laneId:capId,vel}); if(lane.type==='master'||lane.type==='audio'){ const mon=this._monitorLane(c); if(mon&&mon.type!=='master'&&mon.type!=='audio') this._playLane(mon, now+0.004, vel); } else this._playLane(lane, now+0.004, vel); } }
+        else { const lane=this._monitorLane(c); if(lane) this._playLane(lane, now+0.004, vel); } }
+      if(rms<trig*0.55) this.armed=true; }
+    if(capId && this.state.openLane===capId) this._drawLiveWave(); };
+  _centroid(){ this.analyser.getFloatFrequencyData(this.freqBuf); let num=0,den=0; for(let i=1;i<this.freqBuf.length;i++){ const m=Math.pow(10,this.freqBuf[i]/20); num+=i*m; den+=m; } return den>0?(num/den)*(this.ac.sampleRate/this.analyser.fftSize):0; }
+  _monitorLane(c){ const drums=this._drumLanes(); if(!drums.length) return this.state.lanes[0]; const n=drums.length; if(n<=1||this.cMax<=this.cMin) return drums[0]; let v=Math.floor(((c-this.cMin)/(this.cMax-this.cMin))*n); if(v>=n)v=n-1; if(v<0)v=0; return drums[v]; }
+
+  /* ---------- synths ---------- */
+  _playLane(lane, at, vel, pitch, durSec, tune, eq){ if(!this.ac) return; if(lane.type==='master'||lane.type==='audio') return; this.ensureLaneNodes(); vel=Math.max(0.05,Math.min(1.3,vel||0.8));
+    let dest=(this.laneNodes[lane.id]&&this.laneNodes[lane.id].input)||this._voiceBus||this.ac.destination;
+    if(eq&&(eq.low||eq.mid||eq.high)) dest=this._eqChain(eq,dest);   // per-beat 3-band EQ, sits before the lane node
+    if(lane.type==='sample'){ this._samplePlay(this._sndId(lane.sound), at, vel, (pitch!=null?pitch:60)+(tune||0), durSec, dest); }
+    else if(lane.type==='synth'){ this._synthVoice(lane.sound||'sine', this._midiToHz((pitch!=null?pitch:60)+(tune||0)), at, durSec||0.3, vel, dest); }
+    else { this._tuneMul=Math.pow(2,((tune||0))/12); this._drum(lane.sound||'kick', at, vel, dest); this._tuneMul=1; } }
+  /* ---------- My Sounds sampler ---------- */
+  _sndId(key){ return (key||'').indexOf('mys:')===0 ? key.slice(4) : key; }   // lane.sound is "mys:<id>"
+  _soundType(key){ if((key||'').indexOf('mys:')===0) return 'sample'; return this._isSynthSound(key)?'synth':'drum'; }
+  _soundById(id){ return (this.state.mySounds||[]).find(s=>s.id===id); }
+  _sampleBuffer(id){ this._sampleAB=this._sampleAB||{}; if(this._sampleAB[id]) return this._sampleAB[id]; const raw=(this._soundRaw||{})[id]; const snd=this._soundById(id); if(!raw||!snd||!this.ac) return null; const ab=this.ac.createBuffer(1, raw.length, snd.sr||this.ANALYSIS_SR); ab.getChannelData(0).set(raw); this._sampleAB[id]=ab; return ab; }
+  /* Play a gallery sample as an instrument: resample for pitch, trim region, loop-to-extend, gain+release. */
+  _samplePlay(id, at, vel, pitch, durSec, dest){ const snd=this._soundById(id); const ab=this._sampleBuffer(id); if(!snd||!ab) return; const a=this.ac;
+    const rate=Math.pow(2,(((pitch!=null?pitch:60))-(snd.basePitch||60))/12);
+    const off=Math.max(0,snd.trimStart||0); const endS=(snd.trimEnd!=null?snd.trimEnd:ab.duration); const natural=Math.max(0.02,endS-off); const naturalRT=natural/rate;
+    let playDur=(durSec!=null&&durSec>0.02)?durSec:naturalRT;
+    const src=a.createBufferSource(); src.buffer=ab; src.playbackRate.value=rate;
+    // To make a note longer than the sample, loop its sustain body. Use the user's loop
+    // region if set; otherwise auto-pick one (keep a short attack, loop the steady middle)
+    // so a short "ts" can be held out into a long "tsssss" instead of cutting to silence.
+    if(playDur>naturalRT+0.012){ src.loop=true;
+      if(snd.loopStart!=null&&snd.loopEnd!=null&&snd.loopEnd>snd.loopStart){ src.loopStart=snd.loopStart; src.loopEnd=snd.loopEnd; }
+      else { const atk=Math.min(0.045,natural*0.2); src.loopStart=off+atk; src.loopEnd=Math.max(off+atk+0.01,off+natural*0.92); } }
+    const g=a.createGain(); const v=Math.max(0.02,Math.min(1.4,(vel||0.85)*(snd.gain!=null?snd.gain:1))); const rel=0.02;
+    g.gain.setValueAtTime(v,at); g.gain.setValueAtTime(v,at+Math.max(0.01,playDur-rel)); g.gain.exponentialRampToValueAtTime(0.0001,at+playDur+rel);
+    src.connect(g); g.connect(dest); src.start(at, off); src.stop(at+playDur+rel+0.03); }
+  /* Build a per-note low/mid/high shelf-peak-shelf EQ (gains in dB) feeding `out`; returns its input node. */
+  _eqChain(eq,out){ const a=this.ac; const lo=a.createBiquadFilter(); lo.type='lowshelf'; lo.frequency.value=200; lo.gain.value=eq.low||0; const md=a.createBiquadFilter(); md.type='peaking'; md.frequency.value=1200; md.Q.value=0.9; md.gain.value=eq.mid||0; const hi=a.createBiquadFilter(); hi.type='highshelf'; hi.frequency.value=4200; hi.gain.value=eq.high||0; lo.connect(md); md.connect(hi); hi.connect(out); return lo; }
+  _volAt(lane,beat){ const pts=lane.vol; if(!pts||!pts.length) return 1; if(beat<=pts[0].beat) return pts[0].v; if(beat>=pts[pts.length-1].beat) return pts[pts.length-1].v; for(let i=1;i<pts.length;i++){ if(beat<=pts[i].beat){ const a=pts[i-1],b=pts[i]; const t=(beat-a.beat)/Math.max(1e-6,b.beat-a.beat); return a.v+(b.v-a.v)*t; } } return 1; }
+  _synthVoice(preset,freq,at,dur,vel,d){ const a=this.ac; const v=Math.max(0.2,Math.min(1,vel||0.8));
+    const mk=(type,f,det)=>{ const o=a.createOscillator(); o.type=type; o.frequency.value=f; if(det)o.detune.value=det; return o; };
+    const env=(g,peak,atk,rel)=>{ const p=Math.max(0.0009,peak); g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(p,at+atk); const se=Math.max(at+atk+0.008,at+dur-rel); g.gain.setValueAtTime(p,se); g.gain.exponentialRampToValueAtTime(0.0001,at+dur+rel); };
+    const out=a.createGain(); out.connect(d); const oscs=[]; let filter=null; const stop=at+dur+0.7;
+    if(preset==='pad'){ const g=a.createGain(); filter=a.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=900+2000*v; filter.Q.value=0.6; oscs.push(mk('sawtooth',freq,-7),mk('sawtooth',freq,7),mk('sine',freq/2,0)); oscs.forEach(o=>o.connect(g)); g.connect(filter).connect(out); env(out,0.3*v,Math.min(0.25,dur*0.4),Math.min(0.5,dur*0.6+0.1)); }
+    else if(preset==='pluck'){ const g=a.createGain(); filter=a.createBiquadFilter(); filter.type='lowpass'; filter.frequency.setValueAtTime(900+4000*v,at); filter.frequency.exponentialRampToValueAtTime(500,at+Math.min(0.3,dur+0.05)); oscs.push(mk('triangle',freq,0),mk('sawtooth',freq,6)); oscs.forEach(o=>o.connect(g)); g.connect(filter).connect(out); out.gain.setValueAtTime(0.5*v,at); out.gain.exponentialRampToValueAtTime(0.0001,at+Math.min(dur+0.12,0.6)); }
+    else if(preset==='bass'){ const g=a.createGain(); filter=a.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=600+900*v; oscs.push(mk('square',freq,0),mk('sine',freq/2,0)); oscs.forEach(o=>o.connect(g)); g.connect(filter).connect(out); env(out,0.5*v,0.01,Math.min(0.12,dur*0.4)); }
+    else if(preset==='lead'){ const g=a.createGain(); filter=a.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=2200+2600*v; oscs.push(mk('sawtooth',freq,-5),mk('square',freq,5)); oscs.forEach(o=>o.connect(g)); g.connect(filter).connect(out); env(out,0.34*v,0.015,Math.min(0.15,dur*0.4)); }
+    else if(preset==='bell'){ oscs.push(mk('sine',freq,0),mk('sine',freq*2.76,0),mk('sine',freq*5.4,0)); const gs=[0.5,0.3,0.16]; oscs.forEach((o,i)=>{ const g=a.createGain(); g.gain.value=gs[i]; o.connect(g).connect(out); }); out.gain.setValueAtTime(0.5*v,at); out.gain.exponentialRampToValueAtTime(0.0001,at+Math.max(0.45,dur+0.35)); }
+    else if(preset==='organ'){ [1,2,3,4].forEach((h,i)=>{ const o=mk('sine',freq*h,0); const g=a.createGain(); g.gain.value=[0.5,0.25,0.15,0.1][i]; o.connect(g).connect(out); oscs.push(o); }); env(out,0.32*v,0.02,Math.min(0.12,dur*0.3)); }
+    else { oscs.push(mk(preset,freq,0)); oscs[0].connect(out); env(out,0.42*v,0.012,Math.min(0.1,dur*0.4)); }
+    oscs.forEach(o=>{ o.start(at); o.stop(stop); }); }
+  _drum(inst,t,vel,d){ switch(inst){ case 'snare':return this._snare(t,vel,d); case 'rim':return this._rim(t,vel,d); case 'clap':return this._clap(t,vel,d); case 'tomL':return this._tom(t,vel,d,150); case 'tomM':return this._tom(t,vel,d,210); case 'tomH':return this._tom(t,vel,d,285); case 'hat':return this._hat(t,vel,d,false); case 'openhat':return this._hat(t,vel,d,true); case 'cymbal':return this._cymbal(t,vel,d); case 'cowbell':return this._cowbell(t,vel,d); case '808':return this._k808(t,vel,d); case 'shaker':return this._shaker(t,vel,d); case 'congaH':return this._conga(t,vel,d,330); case 'congaL':return this._conga(t,vel,d,220); default:return this._kick(t,vel,d); } }
+  _k808(t,vel,d){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); const m=this._tuneMul||1; o.type='sine'; o.frequency.setValueAtTime(120*m,t); o.frequency.exponentialRampToValueAtTime(38*m,t+0.18); g.gain.setValueAtTime(Math.min(1,vel),t); g.gain.exponentialRampToValueAtTime(0.001,t+0.6); o.connect(g).connect(d); o.start(t); o.stop(t+0.62); }
+  _shaker(t,vel,d){ const a=this.ac,n=a.createBufferSource(); n.buffer=this.noise; const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5000; const g=a.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.32*vel,t+0.012); g.gain.exponentialRampToValueAtTime(0.001,t+0.09); n.connect(hp).connect(g).connect(d); n.start(t); n.stop(t+0.1); }
+  _conga(t,vel,d,f){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); const m=this._tuneMul||1; f*=m; o.type='sine'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.85,t+0.12); g.gain.setValueAtTime(0.7*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18); o.connect(g).connect(d); o.start(t); o.stop(t+0.2); }
+  _kick(t,vel,d){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); const m=this._tuneMul||1; o.type='sine'; o.frequency.setValueAtTime(165*m,t); o.frequency.exponentialRampToValueAtTime(45*m,t+0.12); g.gain.setValueAtTime(Math.min(1,vel),t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22); o.connect(g).connect(d); o.start(t); o.stop(t+0.24); }
+  _snare(t,vel,d){ const a=this.ac,n=a.createBufferSource(); n.buffer=this.noise; const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1300; const g=a.createGain(); g.gain.setValueAtTime(0.7*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.14); n.connect(hp).connect(g).connect(d); n.start(t); n.stop(t+0.16); const o=a.createOscillator(),g2=a.createGain(); o.type='triangle'; o.frequency.value=185; g2.gain.setValueAtTime(0.4*vel,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.1); o.connect(g2).connect(d); o.start(t); o.stop(t+0.12); }
+  _hat(t,vel,d,open){ const a=this.ac,n=a.createBufferSource(); n.buffer=this.noise; const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=open?6000:7000; const g=a.createGain(); const dec=open?0.32:0.05; g.gain.setValueAtTime((open?0.34:0.45)*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+dec); n.connect(hp).connect(g).connect(d); n.start(t); n.stop(t+dec+0.02); }
+  _tom(t,vel,d,f){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); f*=(this._tuneMul||1); o.type='sine'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*0.5,t+0.18); g.gain.setValueAtTime(0.8*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22); o.connect(g).connect(d); o.start(t); o.stop(t+0.24); }
+  _clap(t,vel,d){ const a=this.ac; for(let i=0;i<3;i++){ const n=a.createBufferSource(); n.buffer=this.noise; const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; const g=a.createGain(); const tt=t+i*0.012; g.gain.setValueAtTime(0.55*vel,tt); g.gain.exponentialRampToValueAtTime(0.001,tt+0.07); n.connect(bp).connect(g).connect(d); n.start(tt); n.stop(tt+0.08); } }
+  _rim(t,vel,d){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); o.type='square'; o.frequency.value=1700*(this._tuneMul||1); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.4*vel,t+0.001); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04); o.connect(g).connect(d); o.start(t); o.stop(t+0.05); }
+  _cowbell(t,vel,d){ const a=this.ac,g=a.createGain(); const m=this._tuneMul||1; g.gain.setValueAtTime(0.4*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.25); g.connect(d); [540*m,800*m].forEach(f=>{ const o=a.createOscillator(); o.type='square'; o.frequency.value=f; o.connect(g); o.start(t); o.stop(t+0.26); }); }
+  _cymbal(t,vel,d){ const a=this.ac,n=a.createBufferSource(); n.buffer=this.noise; n.loop=true; const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=8000; const g=a.createGain(); g.gain.setValueAtTime(0.3*vel,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.6); n.connect(hp).connect(g).connect(d); n.start(t); n.stop(t+0.62); }
+  _click(t,accent){ const a=this.ac,o=a.createOscillator(),g=a.createGain(); o.type='square'; o.frequency.value=accent?1600:1000; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(accent?0.3:0.16,t+0.001); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04); o.connect(g).connect(this._voiceBus||a.destination); o.start(t); o.stop(t+0.05); }
+
+  /* ---------- per-lane audio ---------- */
+  _gateLinV(gate){ return Math.pow((gate||0)/100,2)*0.5 + 0.002; }
+  _meta(id){ return this.state.audio[id]||{gate:8,hp:60,playOriginal:false,startBeat:0,len:0}; }
+  _cleanLane(id){ const rec=this._audioBuf[id]; if(!rec) return null; const m=this._meta(id); const sr=rec.sr; let x=rec.raw.slice(0);
+    const fc=m.hp||60; const rc=1/(2*Math.PI*fc); const dt=1/sr; const a=rc/(rc+dt); let py=0,px=0; for(let i=0;i<x.length;i++){ const cur=x[i]; py=a*(py+cur-px); px=cur; x[i]=py; }
+    const gl=this._gateLinV(m.gate); let env=0; for(let i=0;i<x.length;i++){ const mm=Math.abs(x[i]); env=Math.max(mm,env*0.999); x[i]= env<gl?0:x[i]; } return x; }
+  _getAudioBuffer(id){ const rec=this._audioBuf[id]; if(!rec||!this.ac) return null; const m=this._meta(id); const key=m.gate+'_'+m.hp; if(rec.abKey!==key||!rec.ab){ const c=this._cleanLane(id); const ab=this.ac.createBuffer(1,c.length,rec.sr); ab.getChannelData(0).set(c); rec.ab=ab; rec.abKey=key; } return rec.ab; }
+  _downsample(buf,srIn,srOut){ if(srIn<=srOut) return buf.slice(0); const f=srIn/srOut; const n=Math.floor(buf.length/f); const out=new Float32Array(n); for(let i=0;i<n;i++){ const a=Math.floor(i*f),b=Math.floor((i+1)*f); let s=0; for(let j=a;j<b;j++) s+=buf[j]; out[i]=s/Math.max(1,b-a); } return out; }
+
+  /* ---------- per-track record ---------- */
+  _countdown(cb){ if(this._cdTimer){ return; } let n=3; this.setState({countdown:n}); this.ensureAC().then(()=>{ try{ this._click(this.ac.currentTime+0.01,true); }catch(e){} });
+    this._cdTimer=setInterval(()=>{ n--; if(n<=0){ clearInterval(this._cdTimer); this._cdTimer=null; this.setState({countdown:null}); cb(); } else { this.setState({countdown:n}); this.ensureAC().then(()=>{ try{ this._click(this.ac.currentTime+0.01, n===0); }catch(e){} }); } },800); }
+  _micErrText(e){ const n=(e&&e.name)||''; if(n==='NotAllowedError'||n==='SecurityError') return 'blocked'; if(n==='NotFoundError'||n==='OverconstrainedError') return 'nodevice'; return 'other'; }
+  dismissMicError=()=>this.setState({micError:null});
+  retryMic=async()=>{ this.setState({micError:null}); try{ this.analyser=null; await this.ensureMic(); this.setState({micOn:true}); this._setMic(true); }catch(e){ this.setState({micError:this._micErrText(e)}); } };
+  cancelCountdown=()=>{ if(this._cdTimer){ clearInterval(this._cdTimer); this._cdTimer=null; this.setState({countdown:null}); } };
+  onRecLane=(id)=>async()=>{ if(this.state.capLaneId===id){ this._stopCapture(); return; } if(this._cdTimer){ this.cancelCountdown(); return; } if(this.state.capLaneId){ this._stopCapture(); }
+    try{ await this.ensureMic(); }catch(e){ this.setState({micError:this._micErrText(e)}); return; }
+    this._countdown(()=>this._beginLaneCapture(id)); }
+  _beginLaneCapture(id){ if(!this.ac||!this.micHigh) return;
+    this._capChunks=[]; this._capSr=this.ac.sampleRate; this._capId=id; this._capStartBeat=this.state.startAt||0; this._liveEvents=[]; this._liveEnv=[]; this.armed=true; this._noise=null;
+    this._proc=this._makeCaptureNode();
+    this.micHigh.connect(this._proc); this._proc.connect(this._sink);
+    this.recStartAC=this.ac.currentTime; this.recStartBeat=this._capStartBeat; this._scrollToBeat(this.recStartBeat);
+    if(this.state.metronome) this._startMetroRec();
+    this._setMic(true); this.setState({capLaneId:id, openLane:id, playing:false, paused:false}); this._startTick(); }
+  _stopCapture(){ this._stopMetro(); try{ this.micHigh.disconnect(this._proc); }catch(e){} try{ this._proc.disconnect(); }catch(e){} if(this._proc&&this._proc.port) this._proc.port.onmessage=null;
+    let len=0; this._capChunks.forEach(c=>len+=c.length); const raw=new Float32Array(len); let o=0; this._capChunks.forEach(c=>{ raw.set(c,o); o+=c.length; });
+    const ds=this._downsample(raw,this._capSr,this.ANALYSIS_SR); const id=this._capId; this._capChunks=null; this._liveEvents=null; this._liveEnv=null;
+    this.playheadBeat=null; if(this._tickRAF){cancelAnimationFrame(this._tickRAF);this._tickRAF=null;}
+    if(this._capMaster){ const mid=this._capMasterId; this._capMaster=false; this._audioBuf[mid]={raw:ds,sr:this.ANALYSIS_SR}; const lenSec=ds.length/this.ANALYSIS_SR; this.setState(st=>({capLaneId:null, audio:{...st.audio,[mid]:{...(st.audio[mid]||{}),gate:10,hp:70,playOriginal:true,startBeat:this._capStartBeat,len:lenSec}}})); this._setMic(this.state.micOn||this.state.liveOn); setTimeout(()=>{ this._multiExtract(ds, mid); this._drawWave(); },30); return; }
+    this._audioBuf[id]={raw:ds,sr:this.ANALYSIS_SR}; const lenSec=ds.length/this.ANALYSIS_SR;
+    this._pushUndo();
+    this.setState(s=>({ capLaneId:null, openLane:id, audio:{...s.audio,[id]:{gate:8,hp:60,playOriginal:false,startBeat:this._capStartBeat,len:lenSec}} }));
+    this._setMic(this.state.micOn||this.state.liveOn);
+    setTimeout(()=>{ this._extract(id); this._drawWave(); },40); }
+
+  _cleanRaw(raw,sr,gate,hp){ let x=raw.slice(0); const fc=hp||60; const rc=1/(2*Math.PI*fc); const dt=1/sr; const a=rc/(rc+dt); let py=0,px=0; for(let i=0;i<x.length;i++){ const cur=x[i]; py=a*(py+cur-px); px=cur; x[i]=py; } const gl=this._gateLinV(gate); let env=0; for(let i=0;i<x.length;i++){ const mm=Math.abs(x[i]); env=Math.max(mm,env*0.999); x[i]= env<gl?0:x[i]; } return x; }
+  onRecMaster=async()=>{ if(this._capMaster){ this.onStop(); return; } if(this._cdTimer){ this.cancelCountdown(); return; } if(this.state.capLaneId){ this._stopCapture(); }
+    try{ await this.ensureMic(); }catch(e){ this.setState({micError:this._micErrText(e)}); return; }
+    this._countdown(()=>this._beginMasterCapture()); }
+  _beginMasterCapture(){ if(!this.ac||!this.micHigh) return;
+    const lane=this._mkLane('master','master'); const id=lane.id; this._capMaster=true; this._capMasterId=id; this._capStartBeat=this.state.startAt||0;
+    this._pushUndo();
+    // A new master take starts the auto-split fresh: drop the previous master + its derived
+    // tracks (but keep any tracks you made/recorded by hand). This is what prevents the
+    // "54 tracks" pile-up from recording the master several times.
+    this.setState(s=>{ const drop={}; s.lanes.forEach(l=>{ if(l.type==='master'||l.auto) drop[l.id]=1; }); Object.keys(drop).forEach(k=>{ delete this._audioBuf[k]; });
+      const keep=s.lanes.filter(l=>!drop[l.id]); const events=s.events.filter(e=>!drop[e.laneId]);
+      const audio={}; Object.keys(s.audio).forEach(k=>{ if(!drop[k]) audio[k]=s.audio[k]; });
+      return { lanes:[lane].concat(keep), events, evCount:events.length, audio:{...audio,[id]:{gate:10,hp:70,playOriginal:true,startBeat:this._capStartBeat,len:0}} }; }, ()=>{ this.ensureLaneNodes();
+      this._capChunks=[]; this._capSr=this.ac.sampleRate; this._capId=id; this._liveEvents=[]; this._liveEnv=[]; this.armed=true; this._noise=null;
+      this._proc=this._makeCaptureNode();
+      this.micHigh.connect(this._proc); this._proc.connect(this._sink);
+      this.recStartAC=this.ac.currentTime; this.recStartBeat=this._capStartBeat; this._scrollToBeat(this.recStartBeat);
+      if(this.state.metronome) this._startMetroRec();
+      this._setMic(true); this.setState({capLaneId:id, playing:false, paused:false}); this._startTick(); }); }
+  _multiExtract(ds, masterId){ const gate=10,hp=70; const buf=this._cleanRaw(ds,this.ANALYSIS_SR,gate,hp); const gl=this._gateLinV(gate); const ons=this._onsetsFrom(buf,gl);
+    if(!ons.length){ alert('No sounds detected in the master recording. Try again, a bit louder or raise sensitivity.'); return; }
+    const bpm=this.state.bpm, sr=this.ANALYSIS_SR;
+    ons.forEach(o=>{ o.srcDur=Math.max(0.08,Math.min(2.5,o.dur||0.2)); o.lenB=Math.max(0,(o.dur||0))*bpm/60; });   // note length from how long the hit sustains (full sustain, not capped short)
+    this._origRec={raw:ds,sr:sr}; this._origAB=null;   // keep the take so each track can play your real beatbox
+    const gallery=this.state.mySounds||[]; const useMatch=(this.state.matchSounds!==false)&&gallery.length>0;
+    const newLanes=[], newEvents=[];
+    const tag=l=>{ l.auto=true; l.srcMaster=masterId; return l; };
+    if(useMatch){ this._sndFeat=this._sndFeat||{}; const groups={}, order=[]; const upal=['kick','snare','hat','clap','tomM','rim','cowbell','shaker']; let matched=0;
+      ons.forEach(o=>{ const f=this._segFeatures(buf,Math.floor(o.t*sr),sr); const m=this._matchSegment(f); const ok=m.id&&m.dist<=this.MATCH_THRESH; if(ok)matched++; const key=ok?('mys:'+m.id):'__unknown'; if(!groups[key]){ groups[key]=[]; order.push(key); } groups[key].push(o); });
+      order.forEach((key,gi)=>{ let lane; if(key==='__unknown'){ lane=this._mkLane('drum',upal[gi%upal.length]); } else { lane=this._mkLane('drum','kick'); lane.type='sample'; lane.sound=key; } tag(lane); newLanes.push(lane); groups[key].forEach(o=>newEvents.push({id:this._uid('e'),laneId:lane.id,beat:this._capStartBeat+o.t*bpm/60,vel:o.amp||0.8,centroid:o.bright*8000,srcT:o.t,srcDur:o.srcDur,len:o.lenB})); });
+      this.setState({syncMsg:'Matched '+matched+'/'+ons.length+' hits to My Sounds'});
+    } else {
+      let mn=1,mx=0; ons.forEach(o=>{ if(o.bright<mn)mn=o.bright; if(o.bright>mx)mx=o.bright; }); const span=Math.max(1e-3,mx-mn);
+      let K=Math.round(span/0.045); K=Math.max(2,Math.min(this.MASTER_MAX||16,K));
+      const palette=['kick','808','tomL','congaL','tomM','snare','rim','congaH','clap','cowbell','hat','shaker','openhat','cymbal']; const bandLane={};
+      ons.forEach(o=>{ let b=Math.floor((o.bright-mn)/span*K); if(b>=K)b=K-1; if(b<0)b=0;
+        if(bandLane[b]==null){ const sound=palette[Math.min(palette.length-1,Math.round(b/Math.max(1,K-1)*(palette.length-1)))]; const lane=tag(this._mkLane('drum',sound)); bandLane[b]=lane.id; newLanes.push(lane); }
+        newEvents.push({id:this._uid('e'),laneId:bandLane[b],beat:this._capStartBeat+o.t*bpm/60,vel:o.amp||0.8,centroid:o.bright*8000,srcT:o.t,srcDur:o.srcDur,len:o.lenB}); });
+    }
+    // Replace the previous auto-split for THIS master (don't pile up tracks on re-extract).
+    this._pushUndo(); this.setState(s=>{
+      const drop={}; s.lanes.forEach(l=>{ if(l.srcMaster===masterId&&l.id!==masterId) drop[l.id]=1; });
+      Object.keys(drop).forEach(id=>{ delete this._audioBuf[id]; });
+      const baseLanes=s.lanes.filter(l=>!drop[l.id]); const baseEvents=s.events.filter(e=>!drop[e.laneId]);
+      let lanes; const mi=masterId?baseLanes.findIndex(l=>l.id===masterId):-1;
+      if(mi>=0) lanes=baseLanes.slice(0,mi+1).concat(newLanes).concat(baseLanes.slice(mi+1)); else lanes=baseLanes.concat(newLanes);
+      const events=baseEvents.concat(newEvents); return {lanes, events, evCount:events.length}; });
+    this._scrollToBeat(this._capStartBeat); }
+  testLane=(id)=>()=>{ const lane=this._laneById(id); if(!lane) return; this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); this.ensureLaneNodes(); this._playLane(lane, this.ac.currentTime+0.02, 0.9, lane.type==='synth'?60:undefined, lane.type==='synth'?0.4:undefined); }); }
+
+  _extract(id){ const rec=this._audioBuf[id]; if(!rec) return; const lane=this._laneById(id); if(!lane) return; const m=this._meta(id); const gl=this._gateLinV(m.gate); const buf=this._cleanLane(id); const bpm=this.state.bpm; const sb=m.startBeat||0; let newE;
+    if(lane.type==='synth'){ const notes=this._melodyFrom(buf,gl); newE=notes.map(d=>({id:this._uid('e'),laneId:id,beat:sb+d.t*bpm/60,len:Math.max(0.1,d.dur*bpm/60),pitch:d.midi,vel:d.amp||0.8})); }
+    else { const ons=this._onsetsFrom(buf,gl); newE=ons.map(d=>({id:this._uid('e'),laneId:id,beat:sb+d.t*bpm/60,vel:d.amp||0.8,centroid:d.bright*8000,len:(d.dur||0)*bpm/60})); }
+    this.setState(s=>{ const events=s.events.filter(e=>e.laneId!==id).concat(newE); return {events, evCount:events.length}; }); }
+
+  _onsetsFrom(buf,gl){ const sr=this.ANALYSIS_SR; const hop=Math.max(1,Math.floor(sr*0.005)); const win=hop*3; const env=[]; for(let i=0;i<buf.length;i+=hop){ let s=0; for(let j=i;j<Math.min(buf.length,i+win);j++) s+=buf[j]*buf[j]; env.push(Math.sqrt(s/win)); }
+    let maxE=1e-6; env.forEach(e=>{ if(e>maxE)maxE=e; });
+    const onsets=[]; let avg=0; const minGap=Math.max(1,Math.round(0.05*sr/hop)); let last=-1e9;
+    for(let i=1;i<env.length-1;i++){ avg=avg*0.9+env[i]*0.1; const thr=Math.max(gl, avg*1.25, maxE*0.06); if(env[i]>thr&&env[i]>=env[i-1]&&env[i]>=env[i+1]&&(i-last)>minGap){ const t=i*hop/sr; const cz=this._zcr(buf,i*hop,win*3); onsets.push({t,f:i,amp:Math.min(1,0.32+env[i]/maxE*0.68),bright:cz}); last=i; } }
+    /* How long each hit sustains (energy stays up after the attack), capped by the next onset. */
+    const minBelow=Math.max(1,Math.round(0.03*sr/hop));
+    onsets.forEach((o,k)=>{ const sf=o.f; let peak=0; for(let f=sf;f<Math.min(env.length,sf+minGap);f++) if(env[f]>peak)peak=env[f]; const sg=Math.max(gl,peak*0.25); let endF=sf,below=0; for(let f=sf+1;f<env.length;f++){ if(env[f]<sg){ if(++below>=minBelow){ endF=f-below; break; } } else { below=0; endF=f; } } const capF=k<onsets.length-1?onsets[k+1].f:env.length; if(endF>capF)endF=capF; o.endF=endF; o.dur=Math.max(0.04,(endF-sf)*hop/sr); });
+    /* A sustained sound (e.g. "tsssss") that re-triggered the detector → merge into ONE extended note
+       (only when the next hit overlaps this one's sustain and has a similar timbre). Distinct "ts ts" with
+       gaps, or different sounds, stay separate. */
+    const merged=[]; for(const o of onsets){ const p=merged[merged.length-1]; if(p && o.f<=p.endF+minBelow && Math.abs(o.bright-p.bright)<0.085){ p.endF=Math.max(p.endF,o.endF); p.dur=Math.max(0.04,(p.endF-p.f)*hop/sr); p.amp=Math.max(p.amp,o.amp); } else merged.push(o); }
+    return merged; }
+  _zcr(buf,start,len){ let z=0,c=0; for(let i=start+1;i<Math.min(buf.length,start+len);i++){ if((buf[i-1]<0)!==(buf[i]<0)) z++; c++; } return c?z/c:0; }
+  _pitchOf(buf,start,win,sr){ const end=Math.min(buf.length,start+win); const n=end-start; if(n<win*0.5) return 0; let mean=0; for(let i=start;i<end;i++) mean+=buf[i]; mean/=n; const minLag=Math.floor(sr/1200),maxLag=Math.floor(sr/55); let e0=0; for(let i=start;i<end;i++){ const x=buf[i]-mean; e0+=x*x; } if(e0<1e-5) return 0; const corr=[]; let best=0,bestLag=-1; for(let lag=minLag;lag<=maxLag;lag++){ let c=0; for(let i=start;i<end-lag;i++) c+=(buf[i]-mean)*(buf[i+lag]-mean); const nc=c/e0; corr[lag]=nc; if(nc>best){ best=nc; bestLag=lag; } } if(bestLag<=0||best<0.4) return 0; const y0=corr[bestLag-1]!=null?corr[bestLag-1]:best, y1=best, y2=corr[bestLag+1]!=null?corr[bestLag+1]:best; const den=(y0-2*y1+y2); let lag=bestLag; if(den!==0) lag=bestLag+0.5*(y0-y2)/den; return sr/lag; }
+  _melodyFrom(buf,gl){ const sr=this.ANALYSIS_SR; const hop=Math.floor(sr*0.012), win=Math.floor(sr*0.05); const frames=[]; let maxE=1e-6;
+    for(let i=0;i+win<buf.length;i+=hop){ let e=0; for(let j=i;j<i+win;j++) e+=buf[j]*buf[j]; e=Math.sqrt(e/win); if(e>maxE)maxE=e; const hz=this._pitchOf(buf,i,win,sr); frames.push({t:i/sr,e,midi:hz>0?this._hzToMidi(hz):0}); }
+    const eGate=Math.max(gl*0.7, maxE*0.07);
+    const valid=frames.filter(f=>f.midi>0&&f.e>eGate).map(f=>f.midi).sort((a,b)=>a-b); const base=valid.length?valid[Math.floor(valid.length/2)]:60;
+    let lastMidi=base;
+    frames.forEach(f=>{ f.on=f.e>eGate; if(f.midi>0){ while(f.midi-base>9) f.midi-=12; while(base-f.midi>9) f.midi+=12; lastMidi=f.midi; } else if(f.on){ f.midi=lastMidi; } });
+    const med=arr=>{ const a=arr.slice().sort((x,y)=>x-y); return a[Math.floor(a.length/2)]; }; const notes=[]; let cur=null; const dt=hop/sr;
+    frames.forEach(fr=>{ if(fr.on){ if(cur&&Math.abs(fr.midi-cur.midi)<=1){ cur.end=fr.t+dt; cur.mids.push(fr.midi); cur.amp=Math.max(cur.amp,fr.e); } else { if(cur) notes.push(cur); cur={start:fr.t,end:fr.t+dt,mids:[fr.midi],amp:fr.e}; } cur.midi=med(cur.mids); } else { if(cur){ notes.push(cur); cur=null; } } });
+    if(cur) notes.push(cur); const kept=notes.filter(n=>(n.end-n.start)>0.045);
+    for(let i=0;i<kept.length;i++){ let dur=kept[i].end-kept[i].start; if(i<kept.length-1){ const gap=kept[i+1].start-kept[i].end; if(gap<0.13) dur=kept[i+1].start-kept[i].start; } kept[i].finalDur=Math.max(0.1,dur+0.02); }
+    return kept.map(n=>({t:n.start,dur:n.finalDur,midi:Math.round(med(n.mids)),amp:Math.min(1,0.35+n.amp/maxE*0.65)})); }
+
+  /* ---------- sound matching (Phase 2) ----------
+     Each detected onset gets a compact, mostly pitch-invariant timbre fingerprint; we match it to
+     the nearest "My Sounds" gallery sound (k-NN). Good match → that gallery sample becomes the track;
+     no good match (dist > MATCH_THRESH) → an "Unsorted" track you can relabel. */
+  MATCH_THRESH = 0.62;
+  _fftMag(sig){ const N=sig.length; const re=new Float32Array(N), im=new Float32Array(N); for(let i=0;i<N;i++) re[i]=sig[i];
+    for(let i=1,j=0;i<N;i++){ let bit=N>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit; if(i<j){ const tr=re[i];re[i]=re[j];re[j]=tr; const ti=im[i];im[i]=im[j];im[j]=ti; } }
+    for(let len=2;len<=N;len<<=1){ const ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang); for(let i=0;i<N;i+=len){ let cr=1, ci=0; const h=len>>1; for(let k=0;k<h;k++){ const tr=re[i+k+h]*cr-im[i+k+h]*ci, ti=re[i+k+h]*ci+im[i+k+h]*cr; re[i+k+h]=re[i+k]-tr; im[i+k+h]=im[i+k]-ti; re[i+k]+=tr; im[i+k]+=ti; const ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr; } } }
+    const mag=new Float32Array(N>>1); for(let i=0;i<mag.length;i++) mag[i]=Math.sqrt(re[i]*re[i]+im[i]*im[i]); return mag; }
+  _segFeatures(buf,start,sr){ const N=1024; const seg=new Float32Array(N); for(let i=0;i<N;i++){ const s=buf[start+i]||0; const w=0.5-0.5*Math.cos(2*Math.PI*i/(N-1)); seg[i]=s*w; }
+    const mag=this._fftMag(seg); const M=mag.length; let sum=0,cen=0; for(let i=0;i<M;i++){ sum+=mag[i]; cen+=mag[i]*i; } sum=sum||1e-9; const centroid=cen/sum/M;
+    let spread=0; for(let i=0;i<M;i++){ const d=i/M-centroid; spread+=mag[i]*d*d; } spread=Math.sqrt(spread/sum);
+    let acc=0,roll=0; const rt=sum*0.85; for(let i=0;i<M;i++){ acc+=mag[i]; if(acc>=rt){ roll=i/M; break; } }
+    let lg=0,ar=0; for(let i=0;i<M;i++){ const v=mag[i]+1e-9; lg+=Math.log(v); ar+=v; } const flat=Math.exp(lg/M)/(ar/M+1e-9);
+    const B=6, bands=new Float32Array(B); for(let i=0;i<M;i++){ const bi=Math.min(B-1,Math.floor(Math.sqrt(i/M)*B)); bands[bi]+=mag[i]; } let bs=0; for(let i=0;i<B;i++) bs+=bands[i]; bs=bs||1e-9; for(let i=0;i<B;i++) bands[i]/=bs;
+    const zcr=this._zcr(buf,start,N); return {v:[centroid,spread,roll,flat,zcr,bands[0],bands[1],bands[2],bands[3],bands[4],bands[5]]}; }
+  _onsetStart(raw,from,to){ let peak=0; for(let i=from;i<to;i++){ const a=Math.abs(raw[i]); if(a>peak)peak=a; } const th=peak*0.15; for(let i=from;i<to;i++){ if(Math.abs(raw[i])>th) return i; } return from; }
+  _soundFeatures(id){ this._sndFeat=this._sndFeat||{}; if(this._sndFeat[id]) return this._sndFeat[id]; const raw=(this._soundRaw||{})[id]; const snd=this._soundById(id); if(!raw||!snd) return null; const sr=snd.sr||this.ANALYSIS_SR; const a=Math.floor((snd.trimStart||0)*sr); const b=Math.min(raw.length,Math.floor((snd.trimEnd!=null?snd.trimEnd:raw.length/sr)*sr)); const start=this._onsetStart(raw,a,b); const f=this._segFeatures(raw,start,sr); this._sndFeat[id]=f; return f; }
+  _matchDist(a,b){ const w=[1.2,0.8,1.0,0.6,1.0,1.3,1.3,1.3,1.3,1.3,1.3]; let s=0; for(let i=0;i<a.length;i++){ const d=(a[i]-b[i])*w[i]; s+=d*d; } return Math.sqrt(s); }
+  _matchSegment(feat){ const sounds=this.state.mySounds||[]; let best=null,bd=1e9; for(const sn of sounds){ const sf=this._soundFeatures(sn.id); if(!sf) continue; const d=this._matchDist(feat.v,sf.v); if(d<bd){ bd=d; best=sn.id; } } return {id:best,dist:bd}; }
+  /* take editor handlers (operate on openLane) */
+  _sizeFluid(cv,key,h){ const w=Math.max(1,Math.round(cv.clientWidth)); const dpr=window.devicePixelRatio||1; if(this[key+'w']===w&&this[key+'h']===h&&this[key+'d']===dpr){ return; } this[key+'w']=w; this[key+'h']=h; this[key+'d']=dpr; cv.style.height=h+'px'; cv.width=Math.max(1,Math.floor(w*dpr)); cv.height=Math.max(1,Math.floor(h*dpr)); const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); this[key+'ctx']=ctx; }
+  _drawLiveWave(){ const cv=this.waveRef.current; if(!cv) return; const h=96; this._sizeFluid(cv,'_w',h); const w=this._ww; const ctx=this._wctx; const env=this._liveEnv||[]; const mid=h/2;
+    ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d12'; ctx.fillRect(0,0,w,h); ctx.strokeStyle='#ff8a8a'; ctx.lineWidth=1; ctx.beginPath(); const N=env.length;
+    if(N>0){ for(let px=0;px<w;px++){ const a=Math.floor(px/w*N),b=Math.max(a+1,Math.floor((px+1)/w*N)); let pk=0; for(let j=a;j<b&&j<N;j++) if(env[j]>pk)pk=env[j]; const yy=Math.min(mid*0.92,pk*mid*0.92*2.6); ctx.moveTo(px,mid-yy); ctx.lineTo(px,mid+yy); } } ctx.stroke();
+    ctx.fillStyle='#ff5d5d'; ctx.font='700 10px JetBrains Mono, monospace'; ctx.fillText('\u25cf REC',8,16); }
+  _drawWave(){ const cv=this.waveRef.current; const id=this.state.openLane; if(!cv||!id||!this._audioBuf[id]) return; const h=96; this._sizeFluid(cv,'_w',h); const w=this._ww; const ctx=this._wctx; const buf=this._cleanLane(id); const N=buf.length; const mid=h/2;
+    ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d12'; ctx.fillRect(0,0,w,h);
+    if(this._sel){ const x0=this._sel[0]/N*w,x1=this._sel[1]/N*w; ctx.fillStyle='rgba(61,214,255,0.12)'; ctx.fillRect(Math.min(x0,x1),0,Math.abs(x1-x0),h); }
+    ctx.strokeStyle='#5cd6c0'; ctx.beginPath(); const step=Math.max(1,Math.floor(N/w)); for(let px=0;px<w;px++){ let mn=1,mx=-1; const a=Math.floor(px/w*N); for(let j=a;j<a+step&&j<N;j++){ const v=buf[j]; if(v<mn)mn=v; if(v>mx)mx=v; } ctx.moveTo(px,mid-mx*mid*0.92); ctx.lineTo(px,mid-mn*mid*0.92); } ctx.stroke();
+    const gly=this._gateLinV(this._meta(id).gate)*mid*0.92; ctx.strokeStyle='rgba(72,224,139,0.6)'; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(0,mid-gly); ctx.lineTo(w,mid-gly); ctx.moveTo(0,mid+gly); ctx.lineTo(w,mid+gly); ctx.stroke(); ctx.setLineDash([]); }
+  onWaveDown=(e)=>{ const cv=this.waveRef.current; const id=this.state.openLane; if(!cv||!id||!this._audioBuf[id]) return; const rect=cv.getBoundingClientRect(); const N=this._audioBuf[id].raw.length; const w=rect.width; const sAt=cx=>Math.max(0,Math.min(N,Math.round((cx-rect.left)/w*N)));
+    const a=sAt(e.clientX); this._sel=[a,a]; this._drawWave();
+    const move=ev=>{ this._sel=[a,sAt(ev.clientX)]; this._drawWave(); };
+    const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); if(Math.abs(this._sel[1]-this._sel[0])<3){ this._sel=null; this._drawWave(); } };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
+  _setMeta(id,patch){ this.setState(s=>({audio:{...s.audio,[id]:{...this._meta(id),...patch}}})); if(this._audioBuf[id]) this._audioBuf[id].abKey=null; }
+  onGate=(id)=>(e)=>{ this._setMeta(id,{gate:+e.target.value}); setTimeout(()=>this._drawWave(),10); }
+  onHp=(id)=>(e)=>{ this._setMeta(id,{hp:+e.target.value}); setTimeout(()=>this._drawWave(),10); }
+  onCalibrate=(id)=>()=>{ const rec=this._audioBuf[id]; if(!rec) return; const n=Math.min(rec.raw.length,Math.floor(this.ANALYSIS_SR*0.8)); let peak=0; for(let i=0;i<n;i++) peak=Math.max(peak,Math.abs(rec.raw[i])); const g=Math.sqrt(Math.min(0.5,peak*1.8/0.5))*100; this._setMeta(id,{gate:Math.max(3,Math.min(60,Math.round(g)))}); setTimeout(()=>this._drawWave(),20); }
+  onTrimLane=(id)=>()=>{ const rec=this._audioBuf[id]; if(!rec) return; const buf=this._cleanLane(id); const gl=this._gateLinV(this._meta(id).gate)*1.5; let s=0,e=buf.length-1; while(s<buf.length&&Math.abs(buf[s])<gl) s++; while(e>s&&Math.abs(buf[e])<gl) e--; if(e>s){ rec.raw=rec.raw.slice(s,e); rec.abKey=null; this._sel=null; this._setMeta(id,{len:rec.raw.length/this.ANALYSIS_SR}); setTimeout(()=>{this._extract(id);this._drawWave();},20); } }
+  onDeleteSel=(id)=>()=>{ const rec=this._audioBuf[id]; if(!rec||!this._sel) return; const a=Math.min(this._sel[0],this._sel[1]),b=Math.max(this._sel[0],this._sel[1]); const out=new Float32Array(rec.raw.length-(b-a)); out.set(rec.raw.subarray(0,a),0); out.set(rec.raw.subarray(b),a); rec.raw=out; rec.abKey=null; this._sel=null; this._setMeta(id,{len:rec.raw.length/this.ANALYSIS_SR}); setTimeout(()=>{this._extract(id);this._drawWave();},20); }
+  onReExtract=(id)=>()=>{ this._pushUndo(); this._extract(id); this._drawWave(); }
+  onPreviewOrig=(id)=>()=>{ const ab=this._getAudioBuffer(id); if(!ab) return; this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); const src=this.ac.createBufferSource(); src.buffer=ab; src.connect(this._master||this.ac.destination); src.start(); }); }
+  onDeleteRec=(id)=>()=>{ this._pushUndo(); delete this._audioBuf[id]; this.setState(s=>{ const a={...s.audio}; delete a[id]; return {audio:a}; }); }
+  onDetectTempoLane=(id)=>()=>{ const rec=this._audioBuf[id]; if(!rec) return; const ons=this._onsetsFrom(this._cleanLane(id), this._gateLinV(this._meta(id).gate)); if(ons.length<2) return; const iois=[]; for(let i=1;i<ons.length;i++) iois.push(ons[i].t-ons[i-1].t); iois.sort((a,b)=>a-b); const m=iois[Math.floor(iois.length/2)]; if(!m) return; let bpm=60/m; while(bpm<70)bpm*=2; while(bpm>180)bpm/=2; this._pushUndoCo('bpm'); this.setState({bpm:Math.round(bpm)}); }
+  togglePlayOriginal=(id,val)=>()=>{ this._setMeta(id,{playOriginal:val}); }
+
+  /* ---------- grid ---------- */
+  _q(b){ if(!this.state.quantize) return b; const g=this.state.grid||4; return Math.round(b*g)/g; }
+  _gsnap(b){ const g=this.state.grid||4; return Math.max(0,Math.round(b*g)/g); }   /* always snap edits/markers to the time-signature grid so nothing overlaps */
+  _ensureSize(cv,key,w,h){ const dpr=window.devicePixelRatio||1; if(this[key+'w']===w&&this[key+'h']===h&&this[key+'d']===dpr) return; this[key+'w']=w; this[key+'h']=h; this[key+'d']=dpr; cv.style.width=w+'px'; cv.style.height=h+'px'; cv.width=Math.max(1,Math.floor(w*dpr)); cv.height=Math.max(1,Math.floor(h*dpr)); const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); this[key+'ctx']=ctx; }
+  _rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  _redraw(){ const cv=this.grid; if(!cv) return; const s=this.state; const PAD=12,RULER=this.RULER,laneH=this.LANE_H,ppb=this.PPB; const n=s.lanes.length, H=RULER+laneH*n;
+    let maxB=0; s.events.forEach(e=>{ const b=this._q(e.beat)+(e.len||0); if(b>maxB)maxB=b; });
+    s.lanes.forEach(l=>{ const m=s.audio[l.id]; if(m){ const end=(m.startBeat||0)+(m.len||0)*s.bpm/60; if(end>maxB)maxB=end; } });
+    if(this.playheadBeat!=null) maxB=Math.max(maxB,this.playheadBeat); if(s.loopEnd) maxB=Math.max(maxB,s.loopEnd);
+    const totalBeats=Math.max(16,Math.ceil(maxB)+5); const w=PAD*2+totalBeats*ppb; this._ensureSize(cv,'_g',w,H); const ctx=this._gctx;
+    ctx.clearRect(0,0,w,H);
+    s.lanes.forEach((l,i)=>{ const top=RULER+i*laneH; ctx.fillStyle=i%2?'rgba(255,255,255,0.012)':'rgba(255,255,255,0.035)'; ctx.fillRect(0,top,w,laneH); if(l.type==='synth'){ ctx.fillStyle='rgba(124,92,255,0.05)'; ctx.fillRect(0,top,w,laneH); }
+      const m=s.audio[l.id]; const rec=this._audioBuf[l.id]; if(m&&rec&&rec.raw){ const sb=m.startBeat||0; const durB=(m.len||0)*s.bpm/60; const x0=PAD+sb*ppb, wpx=Math.max(2,durB*ppb); const playO=m.playOriginal; ctx.globalAlpha=playO?0.5:0.16; ctx.strokeStyle=this._colorAt(i); ctx.lineWidth=1; ctx.beginPath(); const N=rec.raw.length; const cols=Math.max(1,Math.floor(wpx)); const cy=top+laneH/2; for(let px=0;px<cols;px++){ let mx=0; const a0=Math.floor(px/cols*N),a1=Math.floor((px+1)/cols*N); for(let j=a0;j<a1;j++){ const v=Math.abs(rec.raw[j]); if(v>mx)mx=v; } const yy=mx*(laneH/2-6); ctx.moveTo(x0+px,cy-yy); ctx.lineTo(x0+px,cy+yy); } ctx.stroke(); ctx.globalAlpha=1; }
+      else if(s.capLaneId===l.id && this._liveEnv && this._liveEnv.length){ const env=this._liveEnv; const sb=this.recStartBeat||0; const headB=this.playheadBeat!=null?this.playheadBeat:sb; const span=Math.max(1e-3,headB-sb); const x0=PAD+sb*ppb, wpx=Math.max(2,span*ppb); ctx.strokeStyle=this._colorAt(i); ctx.globalAlpha=0.6; ctx.lineWidth=1; ctx.beginPath(); const cy=top+laneH/2, cols=Math.max(1,Math.floor(wpx)), N=env.length; for(let px=0;px<cols;px++){ let mxv=0; const a0=Math.floor(px/cols*N),a1=Math.max(a0+1,Math.floor((px+1)/cols*N)); for(let j=a0;j<a1&&j<N;j++){ if(env[j]>mxv)mxv=env[j]; } const yy=Math.min(laneH/2-4,mxv*(laneH/2-6)*2.4); ctx.moveTo(x0+px,cy-yy); ctx.lineTo(x0+px,cy+yy); } ctx.stroke(); ctx.globalAlpha=1; }
+      ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.moveTo(0,top); ctx.lineTo(w,top); ctx.stroke(); });
+    for(let b=0;b<=totalBeats;b++){ const x=PAD+b*ppb, bar=b%4===0; if(b<totalBeats){ const g=s.grid||4; for(let k=1;k<g;k++){ const xs=x+k*ppb/g; ctx.strokeStyle='rgba(255,255,255,0.028)'; ctx.beginPath(); ctx.moveTo(xs,RULER); ctx.lineTo(xs,H); ctx.stroke(); } } ctx.strokeStyle=bar?'rgba(255,255,255,0.18)':'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(x,RULER); ctx.lineTo(x,H); ctx.stroke(); if(bar){ ctx.fillStyle='#5a5a68'; ctx.font='600 10px JetBrains Mono, monospace'; ctx.fillText(String(b/4+1),x+4,14); } }
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.moveTo(0,RULER); ctx.lineTo(w,RULER); ctx.stroke();
+    if(s.loopOn&&s.loopStart!=null&&s.loopEnd!=null&&s.loopEnd>s.loopStart){ const xs=PAD+s.loopStart*ppb, xe=PAD+s.loopEnd*ppb; ctx.fillStyle='rgba(61,214,255,0.10)'; ctx.fillRect(xs,RULER,xe-xs,H-RULER); ctx.fillStyle='rgba(61,214,255,0.55)'; ctx.fillRect(xs,0,xe-xs,RULER); ctx.strokeStyle='#3dd6ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(xs,0); ctx.lineTo(xs,H); ctx.moveTo(xe,0); ctx.lineTo(xe,H); ctx.stroke(); ctx.lineWidth=1; }
+    const idx={}; s.lanes.forEach((l,i)=>idx[l.id]=i);
+    const selSet={}; (s.selected||[]).forEach(id=>{selSet[id]=1;});
+    s.events.forEach(e=>{ const i=idx[e.laneId]; if(i==null) return; const l=s.lanes[i]; const m=s.audio[l.id]; if(m&&m.playOriginal) return; const b=this._q(e.beat); const x=PAD+b*ppb; const top=RULER+i*laneH; ctx.globalAlpha=l.muted?0.22:0.92; ctx.fillStyle=this._colorAt(i);
+      if(l.type==='synth'&&e.len){ const wpx=Math.max(8,e.len*ppb); const hh=14; const y=top+(laneH-hh)/2; this._rr(ctx,x,y,wpx,hh,4); ctx.fill(); if(selSet[e.id]){ ctx.globalAlpha=1; ctx.strokeStyle='#3dd6ff'; ctx.lineWidth=2; this._rr(ctx,x-1.5,y-1.5,wpx+3,hh+3,5); ctx.stroke(); } ctx.globalAlpha=1; ctx.fillStyle='#0a0a0f'; ctx.font='700 9px JetBrains Mono, monospace'; if(e.pitch!=null) ctx.fillText(this._noteName(e.pitch),x+4,y+10); }
+      else { const hh=Math.max(10,laneH*0.42),y=top+(laneH-hh)/2; const wpx=(e.len&&e.len*ppb>11)?e.len*ppb:Math.max(9,ppb/4-3); this._rr(ctx,x,y,wpx,hh,3); ctx.fill(); if(selSet[e.id]){ ctx.globalAlpha=1; ctx.strokeStyle='#3dd6ff'; ctx.lineWidth=2; this._rr(ctx,x-1.5,y-1.5,wpx+3,hh+3,4); ctx.stroke(); } } ctx.globalAlpha=1; });
+    { for(let i=0;i<s.lanes.length;i++){ const l=s.lanes[i]; const pts=l.vol; const top=RULER+i*laneH; const vy=(v)=>top+laneH-(Math.max(0,Math.min(1.3,v))/1.3)*laneH; const col=this._colorAt(i);
+      ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1; ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(0,vy(1)); ctx.lineTo(w,vy(1)); ctx.stroke(); ctx.setLineDash([]);
+      if(pts&&pts.length){ ctx.strokeStyle=col; ctx.globalAlpha=0.85; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,vy(pts[0].v)); pts.forEach(p=>ctx.lineTo(PAD+p.beat*ppb,vy(p.v))); ctx.lineTo(w,vy(pts[pts.length-1].v)); ctx.stroke();
+        pts.forEach(p=>{ const px=PAD+p.beat*ppb,py=vy(p.v); ctx.fillStyle='#0a0a0f'; ctx.beginPath(); ctx.arc(px,py,4.5,0,7); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(px,py,4.5,0,7); ctx.stroke(); }); ctx.globalAlpha=1; } }
+    }
+    { const xs=PAD+(s.startAt||0)*ppb; ctx.strokeStyle='rgba(255,93,93,0.45)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(xs,RULER); ctx.lineTo(xs,H); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='rgba(255,93,93,0.6)'; ctx.beginPath(); ctx.moveTo(xs,0); ctx.lineTo(xs+8,0); ctx.lineTo(xs,8); ctx.closePath(); ctx.fill(); }
+    if(s.capLaneId&&this._liveEvents&&this._liveEvents.length){ const li=idx[s.capLaneId]; if(li!=null){ const top=RULER+li*laneH; const hh=Math.max(10,laneH*0.42); const y=top+(laneH-hh)/2; this._liveEvents.forEach(ev=>{ const x=PAD+this._q(ev.beat)*ppb; ctx.fillStyle='#fff'; ctx.globalAlpha=0.9; this._rr(ctx,x,y,Math.max(7,ppb/5),hh,3); ctx.fill(); ctx.globalAlpha=1; }); } }
+    if(this._marquee){ const mi=this._marquee.i; const mtop=RULER+mi*laneH; const xa=Math.min(this._marquee.x0,this._marquee.x1), xb=Math.max(this._marquee.x0,this._marquee.x1); ctx.fillStyle='rgba(61,214,255,0.12)'; ctx.fillRect(xa,mtop,xb-xa,laneH); ctx.strokeStyle='rgba(61,214,255,0.55)'; ctx.lineWidth=1; ctx.strokeRect(xa+0.5,mtop+0.5,xb-xa,laneH-1); }
+    this._drawPlayhead();
+    if(this.state.cornerOpen) this._drawMinimap(); }
+  /* The moving red playhead lives on its OWN viewport-sized overlay canvas. During
+     playback we redraw only THIS (cheap) instead of the whole timeline — the giant
+     grid canvas is left untouched, which is what kills the stutter when zoomed in. */
+  _drawPlayhead(){ const cv=this.playRef&&this.playRef.current, sc=this.scrollRef.current; if(!cv||!sc) return;
+    const W=cv.clientWidth, Hc=cv.clientHeight; if(W<2||Hc<2) return; const dpr=window.devicePixelRatio||1;
+    if(this._plw!==W||this._plh!==Hc||this._pld!==dpr){ this._plw=W; this._plh=Hc; this._pld=dpr; cv.width=Math.max(1,Math.floor(W*dpr)); cv.height=Math.max(1,Math.floor(Hc*dpr)); const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); this._plctx=c; }
+    const ctx=this._plctx; if(!ctx) return; ctx.clearRect(0,0,W,Hc);
+    const s=this.state; const LABELW=288, PAD=12, ppb=this.PPB;
+    // Mirror of the minimap dot: a translucent "you are here" circle over the REAL grid at the
+    // dot's ABSOLUTE grid position (see-through), so it can sit at any corner. Only while open.
+    if(s.cornerOpen){ const loc=this._loc||this._locFromView();
+      let mx=LABELW+loc.gx-sc.scrollLeft, my=loc.gy; mx=Math.max(LABELW+4,Math.min(W-4,mx)); my=Math.max(4,Math.min(Hc-4,my));
+      const r=48; ctx.fillStyle='rgba(61,214,255,0.09)'; ctx.beginPath(); ctx.arc(mx,my,r,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(61,214,255,0.5)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(mx,my,r,0,7); ctx.stroke();
+      ctx.fillStyle='rgba(61,214,255,0.6)'; ctx.beginPath(); ctx.arc(mx,my,5,0,7); ctx.fill(); }
+    const b=this.playheadBeat; if(b==null||!(s.capLaneId||s.playing||s.paused)) return;
+    const x=LABELW+PAD+b*ppb-sc.scrollLeft; if(x<LABELW-1||x>W+1) return;
+    const H=this.RULER+this.LANE_H*s.lanes.length, yb=Math.min(Hc,H);
+    ctx.strokeStyle='#ff5d5d'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,yb); ctx.stroke();
+    ctx.fillStyle='#ff5d5d'; ctx.beginPath(); ctx.moveTo(x-5,0); ctx.lineTo(x+5,0); ctx.lineTo(x,7); ctx.closePath(); ctx.fill(); ctx.lineWidth=1; }
+  _autoScroll(b){ const sc=this.scrollRef.current; if(!sc) return; sc.scrollLeft=Math.max(0,(12+b*this.PPB)-sc.clientWidth*0.55); }
+  _scrollToBeat(b){ const sc=this.scrollRef.current; if(!sc) return; sc.scrollLeft=Math.max(0,(12+b*this.PPB)-sc.clientWidth*0.4); }
+  /* ---------- minimap (location on the grid) ---------- */
+  openCorner=()=>{ if(!this.state.cornerOpen) this.setState({cornerOpen:true}, ()=>{ this._locFromView(); this._drawMinimap(); this._drawPlayhead(); requestAnimationFrame(()=>{ this._drawMinimap(); this._drawPlayhead(); }); }); };
+  closeCorner=()=>{ if(this._cornerLock) return; if(this.state.cornerOpen) this.setState({cornerOpen:false}, ()=>this._drawPlayhead()); };
+  _drawMinimap(){ const cv=this.minimapRef&&this.minimapRef.current; if(!cv) return; const sc=this.scrollRef.current, grid=this.grid; const s=this.state; const PAD=12, ppb=this.PPB, RULER=this.RULER, laneH=this.LANE_H;
+    const totalW=Math.max(1,this._gw||1), totalH=Math.max(1,this._gh||(RULER+laneH*s.lanes.length));
+    // An EXACT miniature of the whole grid: ONE uniform scale (same for x and y) that shrinks
+    // the entire grid to fit a corner box, so proportions match the real thing exactly.
+    const maxW=248, maxH=190; const scale=Math.min(maxW/totalW, maxH/totalH);
+    const w=Math.max(48,Math.round(totalW*scale)), h=Math.max(30,Math.round(totalH*scale)); const dpr=window.devicePixelRatio||1;
+    // Re-acquire the context when the canvas ELEMENT changes (it's remounted every time the
+    // corner reopens); otherwise we'd keep drawing into the old, detached canvas → blank map.
+    if(this._mmEl!==cv||this._mmw!==w||this._mmh!==h||this._mmd!==dpr){ this._mmEl=cv; this._mmw=w; this._mmh=h; this._mmd=dpr; cv.style.width=w+'px'; cv.style.height=h+'px'; cv.width=Math.max(1,Math.floor(w*dpr)); cv.height=Math.max(1,Math.floor(h*dpr)); this._mmctx=cv.getContext('2d'); this._mmctx.setTransform(dpr,0,0,dpr,0,0); }
+    const ctx=this._mmctx; if(!ctx) return; const scaleX=scale, scaleY=scale; const idx={}; s.lanes.forEach((l,i)=>idx[l.id]=i);
+    ctx.clearRect(0,0,w,h); ctx.fillStyle='rgba(13,13,18,0.96)'; ctx.fillRect(0,0,w,h);
+    s.lanes.forEach((l,i)=>{ const ty=(RULER+i*laneH)*scaleY; ctx.fillStyle=i%2?'rgba(255,255,255,0.02)':'rgba(255,255,255,0.05)'; ctx.fillRect(0,ty,w,laneH*scaleY); });
+    s.events.forEach(e=>{ const i=idx[e.laneId]; if(i==null) return; const x=(PAD+this._q(e.beat)*ppb)*scaleX; const ww=Math.max(1,(e.len?e.len*ppb*scaleX:1.5)); const ty=(RULER+i*laneH)*scaleY; ctx.fillStyle=this._colorAt(i); ctx.fillRect(x,ty+laneH*scaleY*0.25,ww,Math.max(1,laneH*scaleY*0.5)); });
+    if(this.playheadBeat!=null&&(s.playing||s.paused||s.capLaneId)){ const px=(PAD+this.playheadBeat*ppb)*scaleX; ctx.strokeStyle='rgba(255,93,93,0.8)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,h); ctx.stroke(); }
+    // ONE location dot at an ABSOLUTE grid position (so it can reach every corner). No viewport
+    // square — the "you are here" spot is mirrored as a translucent circle on the REAL grid.
+    if(grid){ const gr=grid.getBoundingClientRect(); this._mmTopDoc=gr.top+window.scrollY; }
+    const loc=this._loc||this._locFromView(); const cx=Math.max(6,Math.min(w-6,loc.gx*scaleX)), cy=Math.max(6,Math.min(h-6,loc.gy*scaleY));
+    ctx.fillStyle='rgba(61,214,255,0.22)'; ctx.beginPath(); ctx.arc(cx,cy,9,0,7); ctx.fill();
+    ctx.fillStyle='#3dd6ff'; ctx.beginPath(); ctx.arc(cx,cy,6,0,7); ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,6,0,7); ctx.stroke();
+    this._mmGeo={w,h,scaleX,scaleY,totalW,totalH}; }
+  /* The location dot's grid position. When the user isn't dragging it, it tracks the centre of
+     what's on screen; dragging sets it to an absolute grid point and scrolls that point into view. */
+  _locFromView(){ const sc=this.scrollRef.current, grid=this.grid; const totalW=Math.max(1,this._gw||1), totalH=Math.max(1,this._gh||1); const LABELW=288;
+    let gx=totalW/2, gy=totalH/2;
+    if(sc){ const vwid=Math.max(1,Math.min(totalW, sc.clientWidth-LABELW)); gx=Math.max(0,Math.min(totalW, sc.scrollLeft+vwid/2)); }
+    if(grid){ const gr=grid.getBoundingClientRect(); const topDoc=gr.top+window.scrollY; const vt=Math.max(0,Math.min(totalH,window.scrollY-topDoc)); const vb=Math.max(0,Math.min(totalH,window.scrollY+window.innerHeight-topDoc)); gy=(vt+vb)/2; this._mmTopDoc=topDoc; }
+    this._loc={gx,gy}; return this._loc; }
+  onMinimapDown=(e)=>{ const cv=this.minimapRef.current, sc=this.scrollRef.current; if(!cv||!sc) return; e.preventDefault();
+    // Lock the corner open: dragging the dot moves the cursor out of the corner's hover
+    // zone, which would otherwise fire onMouseLeave and unmount the minimap mid-drag.
+    this._cornerLock=true; this._mmActive=true; if(!this._mmGeo) this._drawMinimap(); const rect=cv.getBoundingClientRect(); const LABELW=288;
+    // The dot is an ABSOLUTE grid point: place it exactly where you press (so it reaches every
+    // corner), then scroll the timeline (X) and tracks/page (Y) to bring that point into view.
+    const go=(px,py)=>{ const g=this._mmGeo; if(!g) return; const fx=Math.max(0,Math.min(1,(px-rect.left)/rect.width)), fy=Math.max(0,Math.min(1,(py-rect.top)/rect.height));
+      const gx=fx*g.totalW, gy=fy*g.totalH; this._loc={gx,gy};
+      const vwid=Math.max(1,sc.clientWidth-LABELW); sc.scrollLeft=Math.max(0,Math.min(Math.max(0,sc.scrollWidth-sc.clientWidth), gx-vwid/2));
+      if(this._mmTopDoc!=null){ const targetY=this._mmTopDoc + gy - window.innerHeight/2; window.scrollTo(0,Math.max(0,targetY)); }
+      this._drawPlayhead(); this._drawMinimap(); };
+    go(e.clientX,e.clientY); let lx=e.clientX, ly=e.clientY; const move=ev=>{ lx=ev.clientX; ly=ev.clientY; go(ev.clientX,ev.clientY); };
+    const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); this._cornerLock=false; this._mmActive=false; const r=cv.getBoundingClientRect(); if(lx<r.left-40||lx>r.right+40||ly<r.top-30||ly>r.bottom+160) this.closeCorner(); };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
+
+  /* Drag across an empty part of a lane to rubber-band select its beats; the beat-EQ popover
+     opens on release so you can shape tone/EQ/volume for all of them at once. Single track. */
+  _startMarquee(i, laneId, x0, rect){ const PAD=12, ppb=this.PPB; let moved=false; this._marquee={i,x0,x1:x0};
+    const idsIn=(xa,xb)=>{ const lo=Math.min(xa,xb), hi=Math.max(xa,xb); const ids=[]; this.state.events.forEach(ev=>{ if(ev.laneId!==laneId) return; const ex=PAD+this._q(ev.beat)*ppb; if(ex>=lo-2&&ex<=hi+2) ids.push(ev.id); }); return ids; };
+    const move=ev2=>{ const xc=ev2.clientX-rect.left; if(Math.abs(xc-x0)>4) moved=true; this._marquee={i,x0,x1:xc}; if(moved) this.setState({selected:idsIn(x0,xc)}); else this._redraw(); };
+    const up=ev2=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); const xc=this._marquee?this._marquee.x1:x0; this._marquee=null;
+      if(moved){ this._suppressClick=true; setTimeout(()=>{this._suppressClick=false;},60); const ids=idsIn(x0,xc); this.setState({selected:ids, noteMenu: ids.length?{id:ids[0], x:(ev2?ev2.clientX:0), y:(ev2?ev2.clientY:0)}:null}); }
+      this._redraw(); };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
+  onGridClick=(e)=>{ if(this.state.capLaneId||this._suppressClick) return; const cv=this.grid; if(!cv) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left,y=e.clientY-rect.top; const RULER=this.RULER,laneH=this.LANE_H; if(y<RULER) return;
+    let i=Math.floor((y-RULER)/laneH); if(i<0)i=0; if(i>=this.state.lanes.length)i=this.state.lanes.length-1; const lane=this.state.lanes[i]; const PAD=12,ppb=this.PPB;
+    let found=null; const localY0=y-(RULER+i*laneH); if(localY0>laneH-this.VOL_STRIP) return; for(const ev of this.state.events){ if(ev.laneId!==lane.id) continue; const b=this._q(ev.beat); if(Math.abs(PAD+b*ppb-x)<9){ found=ev.id; break; } }
+    if(found){ if(e.shiftKey){ this.setState(s=>{ const sel=(s.selected||[]).slice(); const k=sel.indexOf(found); if(k>=0)sel.splice(k,1); else sel.push(found); return {selected:sel}; }); return; } this._pushUndo(); this.setState(s=>({events:s.events.filter(ev=>ev.id!==found), evCount:s.events.length-1, selected:(s.selected||[]).filter(z=>z!==found)})); return; }
+    if(!e.shiftKey && (this.state.selected||[]).length) this.setState({selected:[]});
+    let beat=this._gsnap((x-PAD)/ppb);
+    if(this.state.events.some(ev=>ev.laneId===lane.id&&Math.abs(ev.beat-beat)<1e-3)) return;   // slot already taken — don't stack
+    const ev={id:this._uid('e'),laneId:lane.id,beat,vel:0.85,manual:true}; if(lane.type==='synth'){ ev.len=0.5; ev.pitch=60; }
+    this._pushUndo(); this.setState(s=>({events:s.events.concat([ev]), evCount:s.events.length+1}));
+    this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); this._playLane(lane,this.ac.currentTime+0.02,0.85,ev.pitch,ev.len?ev.len*60/this.state.bpm:undefined); }); }
+  onGridDown=(e)=>{ const cv=this.grid; if(!cv) return; const rect=cv.getBoundingClientRect(); const y=e.clientY-rect.top; const PAD=12,ppb=this.PPB;
+    if(y>=this.RULER){ let i=Math.floor((y-this.RULER)/this.LANE_H); if(i<0||i>=this.state.lanes.length) return; const lane=this.state.lanes[i]; const x=e.clientX-rect.left; const laneTop=this.RULER+i*this.LANE_H; const localY=y-laneTop;
+      if(localY>this.LANE_H-this.VOL_STRIP){ e.preventDefault(); this._suppressClick=true; this._pushUndo();
+        const vFromY=cy=>{ let v=(laneTop+this.LANE_H-(cy-rect.top))/this.LANE_H*1.3; return Math.max(0,Math.min(1.3,v)); };
+        let beat=Math.max(0,(x-PAD)/ppb); if(this.state.quantize) beat=this._q(beat);
+        const pts=(lane.vol||[]).slice(); let idx=pts.findIndex(p=>Math.abs(PAD+p.beat*ppb-x)<8);
+        if(idx<0){ const np={beat,v:vFromY(e.clientY)}; pts.push(np); pts.sort((a,b)=>a.beat-b.beat); idx=pts.findIndex(p=>p===np); }
+        const id=lane.id; const apply=arr=>this.setState(s=>({lanes:s.lanes.map(l=>l.id===id?{...l,vol:arr}:l)}));
+        apply(pts);
+        const move=ev2=>{ let nb=Math.max(0,(ev2.clientX-rect.left-PAD)/ppb); if(this.state.quantize) nb=this._q(nb); const cur=(this._laneById(id).vol||[]).slice(); cur[idx]={beat:nb,v:vFromY(ev2.clientY)}; cur.sort((a,b)=>a.beat-b.beat); apply(cur); };
+        const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); setTimeout(()=>{this._suppressClick=false;},60); };
+        window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); return; }
+      let hit=null; for(const ev of this.state.events){ if(ev.laneId!==lane.id) continue; const b=this._q(ev.beat); if(Math.abs(PAD+b*ppb-x)<10){ hit=ev; break; } }
+      if(!hit){ e.preventDefault(); this._startMarquee(i, lane.id, x, rect); return; } e.preventDefault(); this._suppressClick=true; this._pushUndo(); const id=hit.id; const sx=e.clientX; const ob=hit.beat; let did=false;
+      const move=ev2=>{ let nb=this._gsnap(ob+(ev2.clientX-sx)/ppb); if(Math.abs(nb-ob)>1e-4) did=true; this.setState(s=>({events:s.events.map(x=>x.id===id?{...x,beat:nb}:x)})); };
+      const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); setTimeout(()=>{this._suppressClick=false;},60); if(!did){ this._hist.past.pop(); this._flag(); } };
+      window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); return; }
+    e.preventDefault(); const bAt=cx=>this._gsnap((cx-rect.left-PAD)/ppb);   /* loop + red start line snap to the grid */
+    this._selA=bAt(e.clientX); this._moved=false;
+    const move=ev=>{ const b=bAt(ev.clientX); if(!this._moved&&Math.abs(b-this._selA)>0.04) this._moved=true; if(this._moved) this.setState({loopOn:true,loopStart:Math.min(this._selA,b),loopEnd:Math.max(this._selA,b)}); };
+    const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); if(this._moved){ if(Math.abs((this.state.loopEnd||0)-(this.state.loopStart||0))<0.06) this.setState({loopOn:false,loopStart:null,loopEnd:null}); } else { this._pauseB=null; this.playheadBeat=this._selA; this.setState({startAt:this._selA,paused:false}); } };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
+
+  onGridDouble=(e)=>{ const cv=this.grid; if(!cv) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; const PAD=12,ppb=this.PPB;
+    if(y>=this.RULER){ /* double-click a beat to remove it */
+      let i=Math.floor((y-this.RULER)/this.LANE_H); if(i<0||i>=this.state.lanes.length) return; const lane=this.state.lanes[i];
+      let hit=null; for(const ev of this.state.events){ if(ev.laneId!==lane.id) continue; const bb=this._q(ev.beat); if(Math.abs(PAD+bb*ppb-x)<11){ hit=ev; break; } }
+      if(!hit) return; e.preventDefault(); this._suppressClick=true; setTimeout(()=>{this._suppressClick=false;},80); const id=hit.id; this._pushUndo();
+      this.setState(s=>({events:s.events.filter(ev=>ev.id!==id), evCount:s.events.length-1, selected:(s.selected||[]).filter(z=>z!==id), noteMenu:(s.noteMenu&&s.noteMenu.id===id)?null:s.noteMenu})); return; }
+    e.preventDefault(); let b=this._gsnap((x-PAD)/ppb); this._pauseB=null; this.playheadBeat=b; if(this.state.playing) this.onStop(); this.setState({startAt:b,paused:false}, ()=>this.onPlay()); }
+  onGridContext=(e)=>{ const cv=this.grid; if(!cv) return; const rect=cv.getBoundingClientRect(); const x=e.clientX-rect.left,y=e.clientY-rect.top; if(y<this.RULER){ return; } e.preventDefault();
+    let i=Math.floor((y-this.RULER)/this.LANE_H); if(i<0||i>=this.state.lanes.length){ this.setState({noteMenu:null}); return; } const lane=this.state.lanes[i]; const PAD=12,ppb=this.PPB; const localY=y-(this.RULER+i*this.LANE_H);
+    if(localY>this.LANE_H-this.VOL_STRIP){ const pts=(lane.vol||[]); const idx=pts.findIndex(p=>Math.abs(PAD+p.beat*ppb-x)<9); if(idx>=0){ this._pushUndo(); const arr=pts.slice(); arr.splice(idx,1); this.setState(s=>({lanes:s.lanes.map(l=>l.id===lane.id?{...l,vol:arr}:l)})); } this.setState({noteMenu:null}); return; }
+    let hit=null; for(const ev of this.state.events){ if(ev.laneId!==lane.id) continue; const b=this._q(ev.beat); if(Math.abs(PAD+b*ppb-x)<11){ hit=ev; break; } }
+    if(!hit){ this.setState({noteMenu:null}); return; } this.setState({noteMenu:{id:hit.id, x:e.clientX, y:e.clientY}}); }
+  /* The beats the note popover edits: the whole selection if it includes the clicked beat, else just it. */
+  _toneTargets(){ const nm=this.state.noteMenu; if(!nm) return []; const sel=this.state.selected||[]; return (sel.length&&sel.includes(nm.id))?sel.slice():[nm.id]; }
+  _previewBeat(){ const nm=this.state.noteMenu; if(!nm) return; const ev=this.state.events.find(e=>e.id===nm.id); if(!ev) return; const lane=this._laneById(ev.laneId); if(!lane||lane.type==='master'||lane.type==='audio') return; const dur=lane.type==='synth'?((ev.len||0.5)*60/this.state.bpm):undefined; this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); this._playLane(lane, this.ac.currentTime+0.02, (ev.vel!=null?ev.vel:0.85), ev.pitch, dur, ev.tune, ev.eq); }); }
+  _adjustNote=(delta)=>()=>{ const nm=this.state.noteMenu; if(!nm) return; const targets=this._toneTargets(); const tset={}; targets.forEach(id=>tset[id]=1); this._pushUndoCo('tone'+targets.join(',')); this.setState(s=>({events:s.events.map(ev=>{ if(!tset[ev.id]) return ev; const lane=this._laneById(ev.laneId); if(lane&&lane.type==='synth') return {...ev,pitch:Math.max(24,Math.min(96,(ev.pitch!=null?ev.pitch:60)+delta))}; return {...ev,tune:Math.max(-24,Math.min(24,(ev.tune||0)+delta))}; })}), ()=>this._previewBeat()); }
+  _setBeatEq=(band)=>(e)=>{ const v=Math.max(-15,Math.min(15,+e.target.value)); const targets=this._toneTargets(); const tset={}; targets.forEach(id=>tset[id]=1); this._pushUndoCo('eq'+band+targets.join(',')); this.setState(s=>({events:s.events.map(ev=>tset[ev.id]?{...ev,eq:{low:0,mid:0,high:0,...(ev.eq||{}),[band]:v}}:ev)})); }
+  _setBeatVol=(e)=>{ const v=Math.max(0.05,Math.min(1.3,(+e.target.value)/100)); const targets=this._toneTargets(); const tset={}; targets.forEach(id=>tset[id]=1); this._pushUndoCo('bvol'+targets.join(',')); this.setState(s=>({events:s.events.map(ev=>tset[ev.id]?{...ev,vel:v}:ev)})); }
+  stopProp=(e)=>{ e.stopPropagation(); };
+  closeNoteMenu=()=>this.setState({noteMenu:null});
+
+  /* ---------- transport ---------- */
+  _startTick(){ if(!this._tickRAF) this._tickRAF=requestAnimationFrame(this._tick); }
+  _tick=()=>{ const s=this.state; if(!(s.capLaneId||s.playing)){ this._tickRAF=null; if(!s.paused) this.playheadBeat=null; this._redraw(); return; } this._tickRAF=requestAnimationFrame(this._tick);
+    let b; if(s.capLaneId) b=this.recStartBeat+(this.ac.currentTime-this.recStartAC)*s.bpm/60;
+    else if(this._loopActive){ let e=(this.ac.currentTime-this._loopAnchor)*s.bpm/60; if(e<0)e=0; const len=this._loopLenB; b=this._loopStartB+(e%len); }
+    else b=this.playStartBeat+(this.ac.currentTime-this.playStartAC)*s.bpm/60;
+    this.playheadBeat=b; this._autoScroll(b);
+    // Recording grows the live waveform, so it needs the full grid redraw; plain
+    // playback only moves the playhead → redraw just the cheap overlay (no stutter).
+    if(s.capLaneId){ this._redraw(); }
+    else { this._drawPlayhead(); if(s.cornerOpen) this._drawMinimap(); } }
+
+  _audible(l){ const anySolo=this.state.lanes.some(x=>x.solo); return anySolo ? l.solo : !l.muted; }
+  onPlay=()=>{ if(this.state.playing){ this._pausePlay(); return; } this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); this.ensureLaneNodes();
+    const s=this.state; const spb=60/s.bpm; const lanes=s.lanes.slice(); if(!lanes.length) return; this._applyLaneGains();
+    const useLoop=s.loopOn&&s.loopStart!=null&&s.loopEnd!=null&&(s.loopEnd-s.loopStart)>0.05;
+    const evByLane={}; s.events.forEach(e=>{ (evByLane[e.laneId]=evByLane[e.laneId]||[]).push(e); });
+    let anything=false;
+    if(useLoop){ const start=s.loopStart,end=s.loopEnd,len=end-start; this._loopActive=true; this._loopStartB=start; this._loopLenB=len; this._loopAnchor=this.ac.currentTime+0.04;
+      /* Read live state every pass so beats/instruments added, reordered, muted or soloed
+         mid-loop take effect on the next cycle — no stop/play needed. */
+      const fire=(force)=>{ if(!this.ac||(!force&&!this.state.playing)) return; const st=this.state; const sp=60/st.bpm; const base=this.ac.currentTime+0.04;
+        this.ensureLaneNodes(); this._applyLaneGains();
+        st.lanes.forEach(l=>{ const m=st.audio[l.id]; if(m&&m.playOriginal&&this._audioBuf[l.id]){ const sb=m.startBeat||0; if(sb>=start-1e-3&&sb<end-1e-3) this._scheduleAudio(l, base+(sb-start)*sp); }
+          else { const orig=m&&m.playOriginal&&this._origRec; st.events.forEach(e=>{ if(e.laneId!==l.id) return; const b=this._q(e.beat); if(b>=start-1e-3&&b<end-1e-3){ if(orig&&e.srcT!=null) this._origVoice(l, base+(b-start)*sp, e); else this._playLane(l, base+(b-start)*sp, (e.vel||0.8)*this._volAt(l,b), e.pitch, e.len?e.len*sp:undefined, e.tune, e.eq); } }); } }); };
+      anything=true; this._scrollToBeat(start); this.setState({playing:true,paused:false}); this._startTick(); fire(true); this.loopTimer=setInterval(fire, Math.max(120,len*spb*1000));
+    } else { this._loopActive=false; const from=(s.paused&&this._pauseB!=null)?this._pauseB:(s.startAt||0); let maxB=0;
+      this.playStartBeat=from; this.playStartAC=this.ac.currentTime+0.12;
+      lanes.forEach(l=>{ const m=s.audio[l.id]; if(m&&m.playOriginal&&this._audioBuf[l.id]){ const sb=m.startBeat||0; const end=sb+(m.len||0)*s.bpm/60; if(end>maxB)maxB=end; if(end>=from){ this._scheduleAudio(l, this.playStartAC+(sb-from)*spb); anything=true; } }
+        else { const orig=m&&m.playOriginal&&this._origRec; (evByLane[l.id]||[]).forEach(e=>{ const b=this._q(e.beat); const bend=b+(e.len||0); if(bend>maxB)maxB=bend; if(b>=from-1e-3){ if(orig&&e.srcT!=null) this._origVoice(l, this.playStartAC+(b-from)*spb, e); else this._playLane(l, this.playStartAC+(b-from)*spb, (e.vel||0.8)*this._volAt(l,b), e.pitch, e.len?e.len*spb:undefined, e.tune, e.eq); anything=true; } }); } });
+      if(!anything||from>=maxB){ this._loopActive=false; return; }
+      this._scrollToBeat(from); this.setState({playing:true,paused:false}); this._startTick();
+      this.playTimer=setTimeout(()=>this.onStop(), (maxB-from)*spb*1000+600); } }); }
+  _scheduleAudio(lane, when){ const ab=this._getAudioBuffer(lane.id); if(!ab) return; this.ensureLaneNodes(); const src=this.ac.createBufferSource(); src.buffer=ab; const dest=(this.laneNodes[lane.id]&&this.laneNodes[lane.id].input)||this._voiceBus||this.ac.destination; src.connect(dest); try{ src.start(when); }catch(e){} this._activeAudio.push(src); }
+  /* Play one hit's slice of the original beatbox take (your real, un-synthesized sound). */
+  _origVoice(l, when, e){ const rec=this._origRec; if(!rec||!this.ac) return; if(!this._origAB){ const b=this.ac.createBuffer(1,rec.raw.length,rec.sr); b.getChannelData(0).set(rec.raw); this._origAB=b; } this.ensureLaneNodes(); const dest=(this.laneNodes[l.id]&&this.laneNodes[l.id].input)||this._voiceBus||this.ac.destination; const src=this.ac.createBufferSource(); src.buffer=this._origAB; const g=this.ac.createGain(); g.gain.value=Math.max(0.05,Math.min(1.3,e.vel||0.85)); src.connect(g); g.connect(dest); try{ src.start(when, Math.max(0,e.srcT||0), e.srcDur||0.28); }catch(err){} this._activeAudio.push(src); }
+  _laneCanOrig(id){ return !!this._origRec && this.state.events.some(e=>e.laneId===id&&e.srcT!=null); }
+  _pausePlay(){ let b; if(this._loopActive){ const e=(this.ac.currentTime-this._loopAnchor)*this.state.bpm/60; const len=this._loopLenB; b=this._loopStartB+((e%len)+len)%len; } else b=this.playStartBeat+(this.ac.currentTime-this.playStartAC)*this.state.bpm/60; this._pauseB=b; this.playheadBeat=b; clearTimeout(this.playTimer); if(this.loopTimer){clearInterval(this.loopTimer);this.loopTimer=null;} this._loopActive=false; this._killVoices(); if(this._tickRAF){cancelAnimationFrame(this._tickRAF);this._tickRAF=null;} this.setState({playing:false,paused:true}); this._redraw(); }
+  onStop=()=>{ this.cancelCountdown(); if(this.state.capLaneId||this._capMaster) this._stopCapture(); this._capMaster=false; clearTimeout(this.playTimer); if(this.loopTimer){clearInterval(this.loopTimer);this.loopTimer=null;} this._loopActive=false; this._killVoices(); this._stopMetro(); if(this._tickRAF){cancelAnimationFrame(this._tickRAF);this._tickRAF=null;} this._pauseB=null; this.playheadBeat=this.state.startAt||0; this.setState({playing:false,paused:false,capLaneId:null}); this._setMic(this.state.micOn||this.state.liveOn); this._redraw(); }
+  _stopAll(){ clearTimeout(this._sv); clearTimeout(this.playTimer); if(this.loopTimer)clearInterval(this.loopTimer); this._stopMetro(); this._stopAudio(); if(this._tickRAF)cancelAnimationFrame(this._tickRAF); this._setMic(false); }
+
+  _startMetro(){ if(!this.ac) return; this._metroNext=this.ac.currentTime+0.1; this._beat=0; this.metroTimer=setInterval(()=>{ if(!this.ac) return; while(this._metroNext<this.ac.currentTime+0.13){ this._click(this._metroNext,this._beat%4===0); this._metroNext+=60/this.state.bpm; this._beat++; } },25); }
+  _stopMetro(){ if(this.metroTimer){ clearInterval(this.metroTimer); this.metroTimer=null; } }
+  /* Metronome while recording — aligned to the take's start beat so you can play in time. */
+  _startMetroRec(){ if(!this.ac) return; this._stopMetro(); this._metroNext=this.recStartAC||this.ac.currentTime; this._beat=Math.round(this.recStartBeat||0); this.metroTimer=setInterval(()=>{ if(!this.ac) return; const sp=60/this.state.bpm; while(this._metroNext<this.ac.currentTime+0.13){ this._click(this._metroNext,this._beat%4===0); this._metroNext+=sp; this._beat++; } },25); }
+  onLive=async()=>{ if(this.state.liveOn){ this.setState({liveOn:false}); this._setMic(this.state.micOn||!!this.state.capLaneId); return; } try{ await this.ensureMic(); }catch(e){ this.setState({micError:this._micErrText(e)}); return; } this.ensureLaneNodes(); this.armed=true; this._noise=null; this.setState({liveOn:true}); this._setMic(true); }
+  onToggleMic=async()=>{ if(this.state.micOn){ this.setState({micOn:false}); this._setMic(this.state.liveOn||!!this.state.capLaneId); return; } try{ await this.ensureMic(); }catch(e){ this.setState({micError:this._micErrText(e)}); return; } this._noise=null; this.setState({micOn:true}); this._setMic(true); }
+
+  /* ---------- export ---------- */
+  _vlqInto(arr,value){ const buf=[value&0x7f]; value=Math.floor(value/128); while(value>0){ buf.push((value&0x7f)|0x80); value=Math.floor(value/128); } buf.reverse(); buf.forEach(b=>arr.push(b)); }
+  _trackBytes(events,bytesMeta){ const b=[]; b.push(...bytesMeta); let last=0; const evs=events.slice().sort((a,b)=>a.tick-b.tick||(a.on?0:1)-(b.on?0:1)); evs.forEach(e=>{ this._vlqInto(b,e.tick-last); last=e.tick; b.push(e.status,e.note,e.vel); }); this._vlqInto(b,0); b.push(0xff,0x2f,0x00); return b; }
+  onExport=()=>{ const s=this.state; const lanesWith=s.lanes.filter(l=>s.events.some(e=>e.laneId===l.id)); if(!lanesWith.length){ alert('Record or add some notes first.'); return; } const TPQ=480; const ntracks=lanesWith.length+1; const chunks=[];
+    const mpq=Math.round(60000000/s.bpm); const t0=[]; this._vlqInto(t0,0); t0.push(0xff,0x51,0x03,(mpq>>16)&0xff,(mpq>>8)&0xff,mpq&0xff); this._vlqInto(t0,0); t0.push(0xff,0x2f,0x00); chunks.push(t0);
+    lanesWith.forEach(l=>{ const isSyn=l.type==='synth'; const ch=isSyn?0:9; const evlist=[]; const nm=(isSyn?'Synth ':'Drum ')+(l.sound||''); const meta=[]; this._vlqInto(meta,0); meta.push(0xff,0x03,nm.length); for(let i=0;i<nm.length;i++) meta.push(nm.charCodeAt(i)&0x7f);
+      s.events.filter(e=>e.laneId===l.id).forEach(e=>{ const beat=this._q(e.beat); const onT=Math.max(0,Math.round(beat*TPQ)); const dur=isSyn?Math.max(1,Math.round((e.len||0.25)*TPQ)):Math.round(TPQ/8); const note=isSyn?(e.pitch!=null?e.pitch:60):(this.DRUMS.find(x=>x.key===l.sound)||{note:36}).note; const vel=Math.max(1,Math.min(127,Math.round((e.vel||0.8)*127)));
+        evlist.push({tick:onT,status:0x90|ch,note,vel,on:true}); evlist.push({tick:onT+dur,status:0x80|ch,note,vel:0,on:false}); }); chunks.push(this._trackBytes(evlist,meta)); });
+    const out=[]; const pushStr=x=>{ for(let i=0;i<x.length;i++) out.push(x.charCodeAt(i)); };
+    pushStr('MThd'); out.push(0,0,0,6,0,1,(ntracks>>8)&0xff,ntracks&0xff,(TPQ>>8)&0xff,TPQ&0xff);
+    chunks.forEach(c=>{ pushStr('MTrk'); const len=c.length; out.push((len>>24)&0xff,(len>>16)&0xff,(len>>8)&0xff,len&0xff); c.forEach(b=>out.push(b)); });
+    const blob=new Blob([new Uint8Array(out)],{type:'audio/midi'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='beatbox-'+Date.now()+'.mid'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
+
+  /* ---------- save groove + phone→computer sync ----------
+     A groove (project + every original recording) is saved to on-device IndexedDB,
+     fully offline. When the device is on the same network as the laptop's server.py,
+     unsynced grooves auto-upload (/api/projects) and show up in the app on the laptop.
+     If there's no server (e.g. the hosted DC platform), saving still works locally. */
+  _idb(){ if(this._idbP) return this._idbP; this._idbP=new Promise((res,rej)=>{ if(!window.indexedDB){ rej(new Error('no idb')); return; } const r=indexedDB.open('beatbox-grooves',2); r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains('grooves')) db.createObjectStore('grooves',{keyPath:'id'}); if(!db.objectStoreNames.contains('mysounds')) db.createObjectStore('mysounds',{keyPath:'id'}); }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); return this._idbP; }
+  _idbTx(store,mode,fn){ return this._idb().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(store,mode); const rq=fn(tx.objectStore(store)); tx.oncomplete=()=>res(rq?rq.result:undefined); tx.onerror=()=>rej(tx.error); })); }
+  _idbPut(rec){ return this._idbTx('grooves','readwrite',st=>st.put(rec)); }
+  _idbAll(){ return this._idbTx('grooves','readonly',st=>st.getAll()); }
+  _idbGet(id){ return this._idbTx('grooves','readonly',st=>st.get(id)); }
+  _idbPutSound(rec){ return this._idbTx('mysounds','readwrite',st=>st.put(rec)); }
+  _idbAllSounds(){ return this._idbTx('mysounds','readonly',st=>st.getAll()); }
+  _idbDelSound(id){ return this._idbTx('mysounds','readwrite',st=>st.delete(id)); }
+  _b64FromF32(f32){ const u8=new Uint8Array(f32.buffer,f32.byteOffset,f32.byteLength); let s=''; const CH=0x8000; for(let i=0;i<u8.length;i+=CH){ s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); } return btoa(s); }
+  _f32FromB64(b64){ const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); return new Float32Array(u8.buffer); }
+  _collectGroove(name){ const s=this.state; const buffers={}; Object.keys(this._audioBuf||{}).forEach(id=>{ const r=this._audioBuf[id]; if(r&&r.raw&&r.raw.length) buffers[id]={raw:r.raw.slice(0),sr:r.sr}; });
+    const state={ bpm:s.bpm, quantize:s.quantize, grid:s.grid, metronome:s.metronome, sens:s.sens, loopOn:s.loopOn, loopStart:s.loopStart, loopEnd:s.loopEnd, startAt:s.startAt, lanes:JSON.parse(JSON.stringify(s.lanes)), events:JSON.parse(JSON.stringify(s.events)), audioMeta:JSON.parse(JSON.stringify(s.audio||{})) };
+    return { id:'g_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name:name||('Groove '+new Date().toLocaleString()), createdAt:Date.now(), synced:false, state, buffers }; }
+  onSaveGroove=async()=>{ if(!this.state.lanes.some(l=>this.state.events.some(e=>e.laneId===l.id))&&!Object.keys(this._audioBuf||{}).length){ this.setState({syncMsg:'Nothing to save yet — record or add notes first.'}); return; }
+    try{ const rec=this._collectGroove(); await this._idbPut(rec); this.setState({syncMsg:'Saved · '+rec.state.events.length+' notes'}); this._refreshGrooves(); this._syncNow(); }catch(e){ this.setState({syncMsg:'Save failed: '+(e&&e.message||e)}); } };
+  _serverGrooves(){ return fetch('/api/projects',{cache:'no-store'}).then(r=>r.ok?r.json():{projects:[]}).then(j=>j.projects||[]).catch(()=>[]); }
+  async _refreshGrooves(){ let local=[]; try{ local=await this._idbAll(); }catch(e){} let server=this.state.syncOnline?await this._serverGrooves():[];
+    const map={}; local.forEach(g=>{ map[g.id]={id:g.id,name:g.name,notes:((g.state&&g.state.events)||[]).length,tracks:((g.state&&g.state.lanes)||[]).length,createdAt:g.createdAt||0,local:true,synced:!!g.synced,server:false}; });
+    server.forEach(sv=>{ const e=map[sv.id]||{id:sv.id,name:sv.name,notes:sv.notes||0,tracks:sv.tracks||0,createdAt:sv.createdAt||0,local:false,synced:true}; e.server=true; e.synced=true; map[sv.id]=e; });
+    const list=Object.values(map).sort((a,b)=>b.createdAt-a.createdAt);
+    this.setState({grooves:list.map(g=>({id:g.id,name:g.name,tracks:g.tracks,notes:g.notes,createdAt:g.createdAt,local:!!g.local,server:!!g.server,synced:!!g.synced}))}); }
+  async _syncNow(){ if(this._syncing) return; this._syncing=true; try{
+      let ok=false; try{ const r=await fetch('/api/ping',{cache:'no-store'}); ok=r.ok; }catch(e){ ok=false; }
+      if(this.state.syncOnline!==ok) this.setState({syncOnline:ok});
+      if(ok){ let all=[]; try{ all=await this._idbAll(); }catch(e){}
+        for(const g of all.filter(x=>!x.synced)){ try{
+          const audio={}; Object.keys(g.buffers||{}).forEach(id=>{ const b=g.buffers[id]; audio[id]={b64:this._b64FromF32(b.raw),sr:b.sr,len:b.raw.length}; });
+          const resp=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:g.id,name:g.name,createdAt:g.createdAt,state:g.state,audio})});
+          if(resp.ok){ g.synced=true; await this._idbPut(g); this.setState({syncMsg:'Synced "'+g.name+'" to computer ✓'}); }
+        }catch(e){} } }
+      await this._refreshGrooves();
+    } finally { this._syncing=false; } }
+  async _loadGroove(id){ let rec=null; try{ rec=await this._idbGet(id); }catch(e){} let buffers={};
+    if(rec&&rec.buffers){ Object.keys(rec.buffers).forEach(k=>{ const b=rec.buffers[k]; buffers[k]={raw:(b.raw.slice?b.raw.slice(0):new Float32Array(b.raw)),sr:b.sr}; }); }
+    else { try{ const r=await fetch('/api/projects/'+encodeURIComponent(id)); if(!r.ok) return; const data=await r.json(); rec={state:data.state,name:data.name}; Object.keys(data.audio||{}).forEach(k=>{ const a=data.audio[k]; buffers[k]={raw:this._f32FromB64(a.b64),sr:a.sr}; }); }catch(e){ return; } }
+    if(!rec||!rec.state) return; this._pushUndo(); const st=rec.state;
+    this._audioBuf={}; Object.keys(buffers).forEach(k=>{ this._audioBuf[k]=buffers[k]; });
+    this.setState({ lanes:st.lanes, events:st.events, evCount:(st.events||[]).length, bpm:st.bpm, quantize:st.quantize, grid:st.grid, metronome:st.metronome, sens:st.sens, loopOn:st.loopOn, loopStart:st.loopStart, loopEnd:st.loopEnd, startAt:st.startAt||0, audio:st.audioMeta||{}, openLane:null, groovesOpen:false, syncMsg:'Loaded "'+(rec.name||'groove')+'"' }, ()=>{ try{ this.ensureLaneNodes(); }catch(e){} this._recomputeRange(); this._redraw(); }); }
+  onToggleGrooves=()=>{ const open=!this.state.groovesOpen; this.setState({groovesOpen:open}); if(open){ this._syncNow(); } };
+
+  /* ---------- My Sounds gallery ---------- */
+  async _loadSounds(){ let all=[]; try{ all=await this._idbAllSounds(); }catch(e){} this._soundRaw=this._soundRaw||{}; this._sampleAB={}; this._sndFeat={}; all.forEach(s=>{ if(s.raw) this._soundRaw[s.id]=s.raw; }); all.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); this.setState({mySounds:all.map(s=>this._sndMeta(s))}); }
+  _sndMeta(s){ return {id:s.id,name:s.name,createdAt:s.createdAt,sr:s.sr||this.ANALYSIS_SR,basePitch:s.basePitch!=null?s.basePitch:60,trimStart:s.trimStart||0,trimEnd:s.trimEnd!=null?s.trimEnd:(s.len||0),gain:s.gain!=null?s.gain:1,loopStart:s.loopStart!=null?s.loopStart:null,loopEnd:s.loopEnd!=null?s.loopEnd:null,len:s.len||0}; }
+  _persistSound(id){ const snd=this._soundById(id); if(!snd) return; const raw=(this._soundRaw||{})[id]; this._idbPutSound({...snd, raw}).catch(()=>{}); }
+  onToggleSounds=()=>{ const open=!this.state.soundsOpen; this.setState({soundsOpen:open, soundEdit:null}); };
+  toggleMatch=()=>{ this.setState(s=>({matchSounds:!s.matchSounds})); };
+  startSoundRec=async()=>{ if(this.state.soundRec){ this._stopSoundRec(); return; } try{ await this.ensureMic(); }catch(e){ this.setState({micError:this._micErrText(e)}); return; } if(!this.ac||!this.micHigh) return; if(this.ac.state==='suspended'){ try{ await this.ac.resume(); }catch(e){} }
+    this._capChunks=[]; this._capSr=this.ac.sampleRate; this._liveEnv=[]; this._proc=this._makeCaptureNode(); this.micHigh.connect(this._proc); this._proc.connect(this._sink); this._setMic(true); this.setState({soundRec:true}); };
+  _stopSoundRec(){ try{ this.micHigh.disconnect(this._proc); }catch(e){} try{ this._proc.disconnect(); }catch(e){} if(this._proc&&this._proc.port) this._proc.port.onmessage=null;
+    let len=0; (this._capChunks||[]).forEach(c=>len+=c.length); const raw=new Float32Array(len); let o=0; (this._capChunks||[]).forEach(c=>{ raw.set(c,o); o+=c.length; });
+    const ds=this._downsample(raw,this._capSr,this.ANALYSIS_SR); this._capChunks=null; this._setMic(this.state.micOn||this.state.liveOn); this.setState({soundRec:false}); this._addSound(ds); }
+  _addSound(raw){ if(!raw||!raw.length){ return; } const id='snd_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); const len=raw.length/this.ANALYSIS_SR;
+    const snd={id, name:'Sound '+(((this.state.mySounds||[]).length)+1), createdAt:Date.now(), sr:this.ANALYSIS_SR, basePitch:60, trimStart:0, trimEnd:len, gain:1, loopStart:null, loopEnd:null, len};
+    this._soundRaw=this._soundRaw||{}; this._soundRaw[id]=raw; if(this._sampleAB) delete this._sampleAB[id];
+    this._idbPutSound({...snd, raw}).catch(()=>{});
+    this.setState(s=>({mySounds:[snd].concat(s.mySounds||[]), soundEdit:id, soundSel:null}), ()=>this._drawSoundWave()); }
+  _patchSound(id,patch,persist){ if(this._sndFeat) delete this._sndFeat[id]; this.setState(s=>({mySounds:(s.mySounds||[]).map(x=>x.id===id?{...x,...patch}:x)}), ()=>{ if(persist) this._persistSound(id); this._drawSoundWave(); }); }
+  setSoundName=(id)=>(e)=>{ this._patchSound(id,{name:e.target.value},true); };
+  setSoundBase=(id)=>(e)=>{ this._patchSound(id,{basePitch:+e.target.value},true); };
+  setSoundGain=(id)=>(e)=>{ this._patchSound(id,{gain:(+e.target.value)/100},true); };
+  toggleSoundLoop=(id)=>()=>{ const snd=this._soundById(id); if(!snd) return; if(snd.loopStart!=null){ this._patchSound(id,{loopStart:null,loopEnd:null},true); } else { const a=snd.trimStart||0,b=snd.trimEnd||snd.len||0; const m=a+(b-a)*0.35,n=a+(b-a)*0.9; this._patchSound(id,{loopStart:m,loopEnd:n},true); } };
+  editSound=(id)=>()=>{ this.setState({soundEdit:id, soundSel:null}, ()=>this._drawSoundWave()); };
+  deleteSound=(id)=>()=>{ this._idbDelSound(id).catch(()=>{}); if(this._soundRaw) delete this._soundRaw[id]; if(this._sampleAB) delete this._sampleAB[id]; if(this._sndFeat) delete this._sndFeat[id]; this.setState(s=>({mySounds:(s.mySounds||[]).filter(x=>x.id!==id), soundEdit:s.soundEdit===id?null:s.soundEdit})); };
+  previewSound=(id)=>()=>{ const snd=this._soundById(id); if(!snd) return; this.ensureAC().then(()=>{ if(this.ac.state==='suspended') this.ac.resume(); this._samplePlay(id, this.ac.currentTime+0.02, 1, snd.basePitch||60, null, this._master||this.ac.destination); }); };
+  onSoundWaveDown=(e)=>{ const id=this.state.soundEdit; const cv=this.galWaveRef&&this.galWaveRef.current; const snd=this._soundById(id); if(!cv||!snd) return; const rect=cv.getBoundingClientRect(); const dur=snd.len||1; const tAt=cx=>Math.max(0,Math.min(dur, (cx-rect.left)/rect.width*dur));
+    const a=tAt(e.clientX); this._soundSel=[a,a]; this._drawSoundWave();
+    const move=ev=>{ this._soundSel=[a,tAt(ev.clientX)]; this._drawSoundWave(); };
+    const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); const s0=Math.min(this._soundSel[0],this._soundSel[1]),s1=Math.max(this._soundSel[0],this._soundSel[1]); if(s1-s0>0.02){ this._patchSound(id,{trimStart:s0,trimEnd:s1},true); } this._soundSel=null; this._drawSoundWave(); };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
+  _drawSoundWave(){ const id=this.state.soundEdit; if(!id) return; const cv=this.galWaveRef&&this.galWaveRef.current;
+    if(!cv||cv.clientWidth<2){ if(this.state.soundsOpen) requestAnimationFrame(()=>this._drawSoundWave()); return; }   // canvas not laid out yet (e.g. right after recording) — retry next frame
+    const raw=(this._soundRaw||{})[id]; const snd=this._soundById(id); if(!raw||!snd) return; const h=90; this._sizeFluid(cv,'_gw',h); const w=this._gww, ctx=this._gwctx, mid=h/2, N=raw.length, dur=snd.len||(N/this.ANALYSIS_SR);
+    ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d12'; ctx.fillRect(0,0,w,h);
+    const xOf=t=>t/dur*w; ctx.fillStyle='rgba(124,92,255,0.12)'; ctx.fillRect(xOf(snd.trimStart||0),0,xOf((snd.trimEnd!=null?snd.trimEnd:dur)-(snd.trimStart||0)),h);
+    if(snd.loopStart!=null){ ctx.fillStyle='rgba(72,224,139,0.12)'; ctx.fillRect(xOf(snd.loopStart),0,xOf(snd.loopEnd-snd.loopStart),h); }
+    ctx.strokeStyle='#5cd6c0'; ctx.beginPath(); const step=Math.max(1,Math.floor(N/w)); for(let px=0;px<w;px++){ let mn=1,mx=-1; const a0=Math.floor(px/w*N); for(let j=a0;j<a0+step&&j<N;j++){ const v=raw[j]; if(v<mn)mn=v; if(v>mx)mx=v; } ctx.moveTo(px,mid-mx*mid*0.92); ctx.lineTo(px,mid-mn*mid*0.92); } ctx.stroke();
+    if(this._soundSel){ const x0=xOf(this._soundSel[0]),x1=xOf(this._soundSel[1]); ctx.fillStyle='rgba(61,214,255,0.18)'; ctx.fillRect(Math.min(x0,x1),0,Math.abs(x1-x0),h); }
+    ctx.strokeStyle='rgba(124,92,255,0.7)'; ctx.lineWidth=1.5; [snd.trimStart||0,(snd.trimEnd!=null?snd.trimEnd:dur)].forEach(t=>{ ctx.beginPath(); ctx.moveTo(xOf(t),0); ctx.lineTo(xOf(t),h); ctx.stroke(); }); ctx.lineWidth=1; }
+
+  /* ---------- undo/redo ---------- */
+  _snap(){ const s=this.state; return JSON.stringify({lanes:s.lanes,events:s.events,bpm:s.bpm,quantize:s.quantize,loopOn:s.loopOn,loopStart:s.loopStart,loopEnd:s.loopEnd,startAt:s.startAt}); }
+  _flag(){ this.setState({canUndo:this._hist.past.length>0,canRedo:this._hist.future.length>0}); }
+  _pushUndo(){ this._hist.past.push(this._snap()); if(this._hist.past.length>150)this._hist.past.shift(); this._hist.future=[]; this._lastKey=null; this._flag(); }
+  _pushUndoCo(key){ const now=Date.now(); if(!(this._lastKey===key&&now-this._lastTime<700)){ this._hist.past.push(this._snap()); if(this._hist.past.length>150)this._hist.past.shift(); this._hist.future=[]; } this._lastKey=key; this._lastTime=now; this._flag(); }
+  _apply(json){ const d=JSON.parse(json); this._clearLaneNodes(); this._lastKey=null; this.setState({lanes:d.lanes,events:d.events,bpm:d.bpm,quantize:d.quantize,loopOn:d.loopOn,loopStart:d.loopStart,loopEnd:d.loopEnd,startAt:d.startAt,openLane:null,evCount:d.events.length,canUndo:this._hist.past.length>0,canRedo:this._hist.future.length>0}); }
+  onUndo=()=>{ if(!this._hist.past.length) return; this._hist.future.push(this._snap()); this._apply(this._hist.past.pop()); };
+  onRedo=()=>{ if(!this._hist.future.length) return; this._hist.past.push(this._snap()); this._apply(this._hist.future.pop()); };
+
+  /* ---------- setters ---------- */
+  setBpm=(e)=>{ this._pushUndoCo('bpm'); this.setState({bpm:+e.target.value}); };
+  setSens=(e)=>this.setState({sens:+e.target.value});
+  setRaw=()=>{ if(this.state.quantize){ this._pushUndo(); this.setState({quantize:false}); } };
+  setSnap=()=>{ if(!this.state.quantize){ this._pushUndo(); this.setState({quantize:true}); } };
+  setGrid=(e)=>this.setState({grid:+e.target.value, quantize:true});
+  toggleMetro=()=>this.setState(s=>{ const m=!s.metronome; if(s.playing){ if(m)this._startMetro(); else this._stopMetro(); } return {metronome:m}; });
+  toggleLoop=()=>this.setState(s=>({loopOn:!s.loopOn}));
+  zoomIn=()=>this.setState(s=>({zoom:Math.min(4, (s.zoom||1)*1.3)}));
+  zoomOut=()=>this.setState(s=>({zoom:Math.max(0.35, (s.zoom||1)/1.3)}));
+  zoomReset=()=>this.setState({zoom:1});
+  toggleMicPanel=()=>this.setState(s=>{ const p=s.panel==='mic'?null:'mic'; if(p==='mic') setTimeout(()=>{ if(this.levelRef.current&&!this._micActive) this.levelRef.current.style.width='0%'; },20); return {panel:p}; });
+  toggleTimingPanel=()=>this.setState(s=>({panel:s.panel==='timing'?null:'timing'}));
+  closePanels=()=>this.setState({panel:null});
+  onClearAll=()=>{ if(!this.state.events.length) return; this._pushUndo(); this.setState({events:[],evCount:0}); };
+  setMicEq=(band)=>(e)=>{ const v=+e.target.value; const node={low:this.micLow,mid:this.micMid,high:this.micHigh}[band]; if(node)node.gain.value=v; this.setState(s=>({micEq:{...s.micEq,[band]:v}})); };
+  onTapTempo=()=>{ const now=Date.now(); this._taps=this._taps.filter(t=>now-t<2500); this._taps.push(now); if(this._taps.length>=2){ const gaps=[]; for(let i=1;i<this._taps.length;i++) gaps.push(this._taps[i]-this._taps[i-1]); const avg=gaps.reduce((a,b)=>a+b,0)/gaps.length; let bpm=60000/avg; while(bpm<40)bpm*=2; while(bpm>220)bpm/=2; this._pushUndoCo('bpm'); this.setState({bpm:Math.round(bpm)}); } this.forceUpdate(); };
+  addDrumRow=()=>{ if(this.state.lanes.length>=20) return; this._pushUndo(); this.setState(s=>({lanes:s.lanes.concat([this._mkLane('drum','clap')])})); };
+  addSynthRow=()=>{ if(this.state.lanes.length>=20) return; this._pushUndo(); this.setState(s=>({lanes:s.lanes.concat([this._mkLane('synth','sine')])})); };
+  /* One unified "+ New track": starts as a drum, switch it to any instrument/synth from the sound picker. */
+  addRow=()=>{ this.addDrumRow(); };
+  _toggleMute=(id)=>()=>{ this._pushUndo(); this.setState(s=>({lanes:s.lanes.map(l=>l.id===id?{...l,muted:!l.muted}:l)}), ()=>this._applyLaneGains()); };
+  _toggleSolo=(id)=>()=>{ this._pushUndo(); this.setState(s=>({lanes:s.lanes.map(l=>l.id===id?{...l,solo:!l.solo}:l)}), ()=>this._applyLaneGains()); };
+  _toggleExpand=(id)=>()=>{ const opening=this.state.openLane!==id; this.setState({openLane:opening?id:null}); if(opening) setTimeout(()=>this._drawWave(),40); };
+  onCloseLane=()=>this.setState({openLane:null});
+  _isSynthSound(key){ return this.WAVES.some(w=>w.key===key); }
+  /* Only the instrument changes — the beats on the grid stay put. The type follows the
+     chosen sound (drum vs synth) so playback uses the right voice; events are untouched,
+     and because loop playback reads lanes live, a swap mid-loop is heard on the next pass. */
+  _setSound=(id)=>(e)=>{ const v=e.target.value; const newType=this._soundType(v); this._pushUndo();
+    this.setState(s=>({lanes:s.lanes.map(l=>l.id===id?{...l,type:newType,sound:v}:l)})); };
+  _setEq=(id,band)=>(e)=>{ const v=+e.target.value; if(this.laneNodes[id])this.laneNodes[id][band].gain.value=v; this._pushUndoCo('eq'+id+band); this.setState(s=>({lanes:s.lanes.map(l=>l.id===id?{...l,eq:{...l.eq,[band]:v}}:l)})); };
+  _deleteRow=(id)=>()=>{ this._pushUndo(); if(this.laneNodes[id]){ try{this.laneNodes[id].input.disconnect();}catch(e){} delete this.laneNodes[id]; } delete this._audioBuf[id]; this.setState(s=>{ const events=s.events.filter(e=>e.laneId!==id); const a={...s.audio}; delete a[id]; return {lanes:s.lanes.filter(l=>l.id!==id),events,audio:a,evCount:events.length,openLane:null}; }); };
+  _toggleType=(id)=>()=>{ this._pushUndo(); this.setState(s=>{ const lane=s.lanes.find(l=>l.id===id); if(!lane) return {}; const curType=lane.type; const newType=curType==='drum'?'synth':'drum';
+    const mine=s.events.filter(e=>e.laneId===id); const others=s.events.filter(e=>e.laneId!==id);
+    const stash={...(lane.stash||{})}; stash[curType]={sound:lane.sound, events:mine};
+    const restored=stash[newType]; const newSound=restored?restored.sound:(newType==='synth'?'sine':'kick'); const newEvents=restored?restored.events:[];
+    const lanes=s.lanes.map(l=>l.id===id?{...l,type:newType,sound:newSound,stash}:l); const events=others.concat(newEvents);
+    return {lanes, events, evCount:events.length}; }); };
+
+  _soundName(l){ if(l.type==='master') return 'Master recording'; if(l.type==='sample'){ const sn=this._soundById(this._sndId(l.sound)); return sn?sn.name:'My sound'; } const list=l.type==='synth'?this.WAVES:this.DRUMS; const o=list.find(x=>x.key===l.sound); return o?o.name:l.sound; }
+
+  renderVals(){ const s=this.state;
+    const lanesView=s.lanes.map((l,i)=>{ const open=s.openLane===l.id; const m=s.audio[l.id]; const hasAudio=!!m; const capturing=s.capLaneId===l.id; const playO=m&&m.playOriginal; const isMaster=l.type==='master'; const canOrig=hasAudio||this._laneCanOrig(l.id);
+      return { tag:'R'+(i+1), color:this._colorAt(i), soundName:this._soundName(l), typeLabel:l.type, typeColor:l.type==='synth'?'#7c5cff':(l.type==='sample'?'#48e08b':'#6a6a78'), isMaster, showToggle: canOrig&&!isMaster,
+        hasAudio, noAudio:!hasAudio,
+        muted:l.muted, muteBg:l.muted?'#ff5d5d':'transparent', muteFg:l.muted?'#fff':'#9a9aa8',
+        solo:l.solo, soloBg:l.solo?'#ffd24d':'transparent', soloFg:l.solo?'#3a2e00':'#9a9aa8',
+        rowBg: open?'rgba(124,92,255,0.08)':(capturing?'rgba(255,93,93,0.10)':(l.muted?'rgba(255,93,93,0.04)':'transparent')),
+        onMute:this._toggleMute(l.id), onSolo:this._toggleSolo(l.id), onToggle:this._toggleExpand(l.id), onRec:this.onRecLane(l.id),
+        recBg: capturing?'#d63a3a':'transparent', recBorder: capturing?'#ff5d5d':'#3a2a2e', recDotColor: capturing?'#fff':'#ff5d5d', recDotAnim: capturing?'animation:recpulse 1s infinite;':'',
+        extBg: playO?'transparent':'#48e08b', extFg: playO?'#9a9aa8':'#06291a', extBorder: playO?'#2a2a36':'#48e08b', playExtract:this.togglePlayOriginal(l.id,false),
+        origBg: playO?'#3dd6ff':'transparent', origFg: playO?'#06222b':'#9a9aa8', origBorder: playO?'#3dd6ff':'#2a2a36', playOriginal:this.togglePlayOriginal(l.id,true),
+        plusIcon:open?'×':'⚙', plusBg:open?'#7c5cff':'transparent', plusFg:open?'#fff':'#9a9aa8', plusBorder:open?'#7c5cff':'#2a2a36' }; });
+    let openView=null; const ol=s.lanes.find(l=>l.id===s.openLane);
+    if(ol){ const i=this._laneIndex(ol.id); const bands=[['Bass','low'],['Mid','mid'],['Treble','high']]; const m=s.audio[ol.id]; const hasAudio=!!m; const capturing=s.capLaneId===ol.id;
+      openView={ tag:'R'+(i+1), color:this._colorAt(i), soundName:this._soundName(ol), sound:ol.sound, soundLabel:'Instrument', gridCols:ol.type==='master'?'1fr':'240px 1fr',
+        soundOptions:this.DRUMS.map(x=>({key:x.key,name:'Drum — '+x.name})).concat(this.WAVES.map(x=>({key:x.key,name:'Synth — '+x.name}))).concat((s.mySounds||[]).map(x=>({key:'mys:'+x.id,name:'My — '+x.name}))),
+        onSound:this._setSound(ol.id), onTest:this.testLane(ol.id), onClose:this.onCloseLane, onToggleType:this._toggleType(ol.id), otherType:ol.type==='drum'?'a Synth':'a Drum', onDelete:this._deleteRow(ol.id),
+        eqBands:bands.map(([name,key])=>{ const v=(ol.eq&&ol.eq[key])||0; return {name,value:v,display:(v>0?'+':'')+v+' dB',onChange:this._setEq(ol.id,key)}; }),
+        hasAudio, noAudio:!hasAudio, capturing, isMaster:ol.type==='master', notMaster:ol.type!=='master', showWave: hasAudio||capturing, controlsReady: hasAudio&&!capturing, showEmpty: !hasAudio&&!capturing, extractKind: ol.type==='synth'?'melody notes':(ol.type==='master'?'all instruments':'drum hits'),
+        takeLen: m?(m.len||0).toFixed(1):'0', gate: m?m.gate:8, hp: m?m.hp:60,
+        onGate:this.onGate(ol.id), onHp:this.onHp(ol.id), onCalibrate:this.onCalibrate(ol.id), onTrim:this.onTrimLane(ol.id), onDeleteSel:this.onDeleteSel(ol.id),
+        onReExtract: ol.type==='master' ? (()=>{ const rec=this._audioBuf[ol.id]; if(rec){ this._multiExtract(rec.raw, ol.id); } }) : this.onReExtract(ol.id), onDetectTempo:this.onDetectTempoLane(ol.id), onPreviewOrig:this.onPreviewOrig(ol.id), onDeleteRec:this.onDeleteRec(ol.id), onRec: ol.type==='master'?this.onRecMaster:this.onRecLane(ol.id),
+        recLabel: capturing?'■ Stop recording':(hasAudio?'● Re-record':'● Record beatbox'), recBg2: capturing?'#d63a3a':'#ff5d5d', recFg2:'#fff', recBorder: capturing?'#ff5d5d':'#ff5d5d', recDotAnim: capturing?'animation:recpulse 1s infinite;':'' }; }
+    const meB=[['Bass','low'],['Mid','mid'],['Treble','high']];
+    let noteView=null; if(s.noteMenu){ const ev=s.events.find(e=>e.id===s.noteMenu.id); if(ev){ const lane=this._laneById(ev.laneId); const isS=lane&&lane.type==='synth'; const sel=s.selected||[]; const multi=sel.length>1&&sel.includes(s.noteMenu.id); const cnt=multi?sel.length:1; const eq=ev.eq||{low:0,mid:0,high:0}; const vol=Math.round((ev.vel!=null?ev.vel:0.85)*100); const dB=v=>(v>0?'+':'')+(v||0)+' dB';
+      noteView={ x:s.noteMenu.x, y:s.noteMenu.y, title:(multi?(cnt+' beats'):'Beat'),
+        toneName: isS?'Pitch':'Tune', toneLabel: isS?this._noteName(ev.pitch!=null?ev.pitch:60):(((ev.tune||0)>0?'+':'')+(ev.tune||0)+' st'),
+        bass:eq.low||0, mid:eq.mid||0, treble:eq.high||0, bassD:dB(eq.low), midD:dB(eq.mid), trebleD:dB(eq.high),
+        vol:vol, volD:vol+'%' }; } }
+    const micEqBands=meB.map(([name,key])=>{ const v=(s.micEq&&s.micEq[key])||0; return {name,value:v,display:(v>0?'+':'')+v,onChange:this.setMicEq(key)}; });
+    const hasLoop=s.loopOn&&s.loopStart!=null&&s.loopEnd!=null&&s.loopEnd>s.loopStart;
+    const on=v=>v?{bg:'#ff5d5d',fg:'#fff'}:{bg:'transparent',fg:'#9a9aa8'};
+    const rawT=on(!s.quantize),quantT=on(s.quantize),metroT=on(s.metronome);
+    const groovesView=(s.grooves||[]).map(g=>{ const status=(g.server&&!g.local)?'On computer':(g.synced?'Synced ✓':'On this device'); return { id:g.id, name:g.name, meta:g.tracks+' tracks · '+g.notes+' notes · '+(g.createdAt?new Date(g.createdAt).toLocaleString():''), status, statusColor: g.server&&!g.local?'#7c5cff':(g.synced?'#48e08b':'#ffd24d'), onLoad:()=>this._loadGroove(g.id) }; });
+    const soundsView=(s.mySounds||[]).map(sn=>({ id:sn.id, name:sn.name, meta:(sn.len||0).toFixed(2)+'s · base '+this._noteName(sn.basePitch||60), editing:s.soundEdit===sn.id, onPreview:this.previewSound(sn.id), onEdit:this.editSound(sn.id), onDelete:this.deleteSound(sn.id) }));
+    const se=s.soundEdit?this._soundById(s.soundEdit):null;
+    const soundEditView= se ? { id:se.id, name:se.name, onName:this.setSoundName(se.id), base:se.basePitch||60, baseLabel:this._noteName(se.basePitch||60), onBase:this.setSoundBase(se.id), gain:Math.round((se.gain!=null?se.gain:1)*100), gainLabel:Math.round((se.gain!=null?se.gain:1)*100)+'%', onGain:this.setSoundGain(se.id), trimLabel:((se.trimStart||0)).toFixed(2)+'–'+((se.trimEnd!=null?se.trimEnd:se.len)||0).toFixed(2)+'s', looping:se.loopStart!=null, loopLabel:se.loopStart!=null?'Loop on':'Loop off', onLoop:this.toggleSoundLoop(se.id), onPreview:this.previewSound(se.id) } : null;
+    return {
+      gridRef:this.gridRef, scrollRef:this.scrollRef, levelRef:this.levelRef, waveRef:this.waveRef,
+      minimapRef:this.minimapRef, playRef:this.playRef, onMinimapDown:this.onMinimapDown, openCorner:this.openCorner, closeCorner:this.closeCorner, cornerOpen:s.cornerOpen, cornerClosed:!s.cornerOpen,
+      countdown:s.countdown, countdownShown:s.countdown!=null, cancelCountdown:this.cancelCountdown,
+      micErrorShown:s.micError!=null, micErrorBlocked:s.micError==='blocked', micErrorNoDevice:s.micError==='nodevice', micErrorOther:s.micError==='other'&&s.micError!=null, dismissMicError:this.dismissMicError, retryMic:this.retryMic,
+      onGridClick:this.onGridClick, onGridDown:this.onGridDown, onGridDouble:this.onGridDouble, onWaveDown:this.onWaveDown, onGridContext:this.onGridContext,
+      playIcon:s.playing?'⏸':'▶', playTitle:s.playing?'Pause':(s.paused?'Resume':'Play'), playBg:s.playing?'#48e08b':'#16161e', playFg:s.playing?'#06291a':'#e8e8ef',
+      stopBg:(s.playing||s.capLaneId||s.paused)?'#1c1c26':'transparent', stopFg:(s.playing||s.capLaneId||s.paused)?'#e8e8ef':'#5a5a66',
+      loopState:s.loopOn?'on':'off', loopTitle:s.loopOn?'Loop on — click to turn off':'Loop off — drag the top ruler to set a region', loopBg:hasLoop&&s.loopOn?'rgba(61,214,255,0.14)':'transparent', loopFg:hasLoop&&s.loopOn?'#3dd6ff':'#9a9aa8', loopBorder:hasLoop&&s.loopOn?'#3dd6ff':'#2a2a36',
+      outIcon:s.outputMuted?'🔇':'🔊', outTitle:s.outputMuted?'Output muted (no headphones mode)':'Output on', outBg:s.outputMuted?'rgba(255,93,93,0.14)':'transparent', outFg:s.outputMuted?'#ff7a7a':'#9a9aa8', outBorder:s.outputMuted?'#ff5d5d':'#2a2a36', toggleOutput:this.toggleOutput,
+      toggleMicPanel:this.toggleMicPanel, toggleTimingPanel:this.toggleTimingPanel, closePanels:this.closePanels,
+      showMicPanel:s.panel==='mic', showTimingPanel:s.panel==='timing',
+      micActiveDot:s.micOn||s.liveOn,
+      micPanelBg:s.panel==='mic'?'#7c5cff':((s.micOn||s.liveOn)?'rgba(72,224,139,0.12)':'transparent'), micPanelFg:s.panel==='mic'?'#fff':'#d8d8e0', micPanelBorder:s.panel==='mic'?'#7c5cff':((s.micOn||s.liveOn)?'#48e08b':'#2a2a36'),
+      metroPanelBg:s.panel==='timing'?'#7c5cff':(s.metronome?'rgba(255,210,77,0.14)':'transparent'), metroPanelFg:s.panel==='timing'?'#fff':(s.metronome?'#ffd24d':'#d8d8e0'), metroPanelBorder:s.panel==='timing'?'#7c5cff':(s.metronome?'#ffd24d':'#2a2a36'),
+      evCount:s.evCount, rowCount:s.lanes.length, bpm:s.bpm,
+      undoOp:s.canUndo?'1':'0.32', redoOp:s.canRedo?'1':'0.32',
+      onUndo:this.onUndo, onRedo:this.onRedo, onExport:this.onExport, onPlay:this.onPlay, onStop:this.onStop, toggleLoop:this.toggleLoop, onClearAll:this.onClearAll,
+      onSaveGroove:this.onSaveGroove, onToggleGrooves:this.onToggleGrooves, groovesOpen:s.groovesOpen, groovesView, hasGrooves:(s.grooves||[]).length>0, noGrooves:(s.grooves||[]).length===0,
+      onToggleSounds:this.onToggleSounds, soundsOpen:s.soundsOpen, soundsView, hasSounds:(s.mySounds||[]).length>0, noSounds:(s.mySounds||[]).length===0, onToggleMatch:this.toggleMatch, matchOn:s.matchSounds!==false, matchLabel:(s.matchSounds!==false)?'Match: ON':'Match: OFF', matchBg:(s.matchSounds!==false)?'rgba(72,224,139,0.14)':'transparent', matchFg:(s.matchSounds!==false)?'#48e08b':'#8a8a99', matchBorder:(s.matchSounds!==false)?'#48e08b':'#2a2a36', soundRec:s.soundRec, soundRecLabel:s.soundRec?'■ Stop recording':'● Record a sound', soundRecBg:s.soundRec?'#d63a3a':'#48e08b', soundRecFg:s.soundRec?'#fff':'#06291a', onSoundRec:this.startSoundRec, galWaveRef:this.galWaveRef, onSoundWaveDown:this.onSoundWaveDown, soundEditing:!!soundEditView, soundEditView:soundEditView||{id:'',name:'',base:60,baseLabel:'C4',gain:100,gainLabel:'100%',trimLabel:'',looping:false,loopLabel:'Loop off',onName:()=>{},onBase:()=>{},onGain:()=>{},onLoop:()=>{},onPreview:()=>{}},
+      syncMsg:s.syncMsg, hasSyncMsg:!!s.syncMsg, syncDotColor:s.syncOnline?'#48e08b':'#5a5a66', syncTitle:s.syncOnline?'Computer reachable — grooves sync automatically':'Offline — grooves save on this device and sync when you’re back on the same WiFi',
+      noteMenuShown: !!noteView, noteView: noteView||{x:0,y:0,title:'',toneName:'',toneLabel:'',bass:0,mid:0,treble:0,bassD:'0 dB',midD:'0 dB',trebleD:'0 dB',vol:85,volD:'85%'}, stopProp:this.stopProp, adjUp:this._adjustNote(1), adjDown:this._adjustNote(-1), adjUpOct:this._adjustNote(12), adjDownOct:this._adjustNote(-12), onBeatBass:this._setBeatEq('low'), onBeatMid:this._setBeatEq('mid'), onBeatTreble:this._setBeatEq('high'), onBeatVol:this._setBeatVol, closeNoteMenu:this.closeNoteMenu,
+      onRecMaster:this.onRecMaster, masterLabel:s.capLaneId==='__master__'?'Recording master…':'Record master', masterBg:s.capLaneId==='__master__'?'#d63a3a':'rgba(124,92,255,0.14)', masterFg:s.capLaneId==='__master__'?'#fff':'#c0a8ff', masterBorder:s.capLaneId==='__master__'?'#ff5d5d':'#5a4a8a', masterDot:s.capLaneId==='__master__'?'#fff':'#7c5cff', masterDotAnim:s.capLaneId==='__master__'?'animation:recpulse 1s infinite;':'',
+      addRow:this.addRow, addDrumRow:this.addDrumRow, addSynthRow:this.addSynthRow,
+      zoomIn:this.zoomIn, zoomOut:this.zoomOut, zoomReset:this.zoomReset, zoomPct:Math.round((s.zoom||1)*100)+'%',
+      lanesView, hasOpen:openView!=null, openView:openView||{tag:'',color:'#666',soundName:'',sound:'',soundLabel:'',gridCols:'240px 1fr',soundOptions:[],onSound:()=>{},onClose:()=>{},onToggleType:()=>{},otherType:'',onDelete:()=>{},eqBands:[],hasAudio:false,noAudio:true,extractKind:'',takeLen:'0',gate:8,hp:60,onGate:()=>{},onHp:()=>{},onCalibrate:()=>{},onTrim:()=>{},onDeleteSel:()=>{},onReExtract:()=>{},onDetectTempo:()=>{},onPreviewOrig:()=>{},onDeleteRec:()=>{},onRec:()=>{},recLabel:'',recBg2:'#ff5d5d',recFg2:'#fff',recBorder:'#ff5d5d',recDotAnim:''},
+      micEqBands, sens:s.sens, setSens:this.setSens, threshLeft:Math.min(100,this._floor()*260).toFixed(0)+'%',
+      micLabel:s.micOn?'● Mic live':'Enable mic', micBg:s.micOn?'rgba(72,224,139,0.14)':'transparent', micFg:s.micOn?'#48e08b':'#9a9aa8', micBorder:s.micOn?'#48e08b':'#2a2a36', onToggleMic:this.onToggleMic,
+      improvLabel:s.liveOn?'Jamming':'Jam', improvBg:s.liveOn?'rgba(72,224,139,0.12)':'transparent', improvFg:s.liveOn?'#48e08b':'#9a9aa8', improvBorder:s.liveOn?'#48e08b':'#2a2a36', onLive:this.onLive,
+      rawBg:rawT.bg, rawFg:rawT.fg, quantBg:quantT.bg, quantFg:quantT.fg, setRaw:this.setRaw, setSnap:this.setSnap, setGrid:this.setGrid, gridVal:String(s.grid||4), showGridSel:s.quantize, gridOptions:[{key:'1',name:'1/4 note'},{key:'2',name:'1/8 note'},{key:'3',name:'1/8 triplet'},{key:'4',name:'1/16 note'},{key:'6',name:'1/16 triplet'},{key:'8',name:'1/32 note'}], setBpm:this.setBpm, onTapTempo:this.onTapTempo, tapHint:this._taps.length>=2?'('+s.bpm+')':'', toggleMetro:this.toggleMetro, metroBg:metroT.bg, metroFg:metroT.fg, metroState:s.metronome?'on':'off'
+    };
+  }
+}
+</script>
+</body>
+</html>

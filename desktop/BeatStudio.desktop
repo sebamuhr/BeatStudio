@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Beat Studio
+Comment=Beatbox to MIDI — native studio
+Exec=/home/sebastian/Documents/APPS/Beat/desktop/run.sh
+Icon=/home/sebastian/Documents/APPS/Beat/desktop/icon.png
+Terminal=false
+Categories=AudioVideo;Audio;Music;
+StartupNotify=true

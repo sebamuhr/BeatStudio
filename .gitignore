@@ -1,0 +1,20 @@
+# Python
+desktop/.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Machine-specific / private (contains LAN IP + would leak keys)
+desktop/config.json
+certs/
+
+# User data & generated artifacts (binary, regenerable, machine-local)
+desktop/mysounds/
+desktop/usermodel/
+desktop/samples/
+desktop/projects/
+synced/
+uploads/
+.thumbnail/
+*.flac
+*.wav

@@ -1,0 +1,4029 @@
+{
+ "bpm": 167,
+ "grid": 4,
+ "start_at": 0,
+ "metronome": false,
+ "loop_on": true,
+ "loop_start": 0.5,
+ "loop_end": 36.5,
+ "lanes": [
+  {
+   "id": "R709",
+   "kind": "drum",
+   "sound": "kick",
+   "name": "Kick",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R745",
+   "kind": "drum",
+   "sound": "snare",
+   "name": "Snare",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R764",
+   "kind": "drum",
+   "sound": "hat",
+   "name": "Hat",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R856",
+   "kind": "drum",
+   "sound": "kick",
+   "name": "Tom",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R867",
+   "kind": "synth",
+   "sound": "bass",
+   "name": "Bass",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R901",
+   "kind": "synth",
+   "sound": "pad",
+   "name": "Pad",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  },
+  {
+   "id": "R938",
+   "kind": "synth",
+   "sound": "pluck",
+   "name": "Lead",
+   "muted": false,
+   "solo": false,
+   "auto": true,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "has_original": false,
+   "play_original": false
+  }
+ ],
+ "events": [
+  {
+   "id": "e710",
+   "lane_id": "R709",
+   "beat": 2.75,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e711",
+   "lane_id": "R709",
+   "beat": 3.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e712",
+   "lane_id": "R709",
+   "beat": 4.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e713",
+   "lane_id": "R709",
+   "beat": 6.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e714",
+   "lane_id": "R709",
+   "beat": 6.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e715",
+   "lane_id": "R709",
+   "beat": 7.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e716",
+   "lane_id": "R709",
+   "beat": 7.75,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e717",
+   "lane_id": "R709",
+   "beat": 8.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e718",
+   "lane_id": "R709",
+   "beat": 9.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e719",
+   "lane_id": "R709",
+   "beat": 10.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e720",
+   "lane_id": "R709",
+   "beat": 11.75,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e721",
+   "lane_id": "R709",
+   "beat": 12.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e722",
+   "lane_id": "R709",
+   "beat": 14.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e723",
+   "lane_id": "R709",
+   "beat": 14.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e724",
+   "lane_id": "R709",
+   "beat": 16.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e725",
+   "lane_id": "R709",
+   "beat": 16.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e726",
+   "lane_id": "R709",
+   "beat": 17.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e727",
+   "lane_id": "R709",
+   "beat": 17.75,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e728",
+   "lane_id": "R709",
+   "beat": 18.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e729",
+   "lane_id": "R709",
+   "beat": 19.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e730",
+   "lane_id": "R709",
+   "beat": 20.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e731",
+   "lane_id": "R709",
+   "beat": 21.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e732",
+   "lane_id": "R709",
+   "beat": 22.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e733",
+   "lane_id": "R709",
+   "beat": 23.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e734",
+   "lane_id": "R709",
+   "beat": 24.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e735",
+   "lane_id": "R709",
+   "beat": 26.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e736",
+   "lane_id": "R709",
+   "beat": 27.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e737",
+   "lane_id": "R709",
+   "beat": 27.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e738",
+   "lane_id": "R709",
+   "beat": 28.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e739",
+   "lane_id": "R709",
+   "beat": 29.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e740",
+   "lane_id": "R709",
+   "beat": 30.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e741",
+   "lane_id": "R709",
+   "beat": 30.5,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e742",
+   "lane_id": "R709",
+   "beat": 32.0,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e743",
+   "lane_id": "R709",
+   "beat": 33.75,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e744",
+   "lane_id": "R709",
+   "beat": 35.25,
+   "vel": 0.8,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e746",
+   "lane_id": "R745",
+   "beat": 2.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e747",
+   "lane_id": "R745",
+   "beat": 4.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e748",
+   "lane_id": "R745",
+   "beat": 6.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e749",
+   "lane_id": "R745",
+   "beat": 8.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e750",
+   "lane_id": "R745",
+   "beat": 10.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e751",
+   "lane_id": "R745",
+   "beat": 12.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e752",
+   "lane_id": "R745",
+   "beat": 14.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e753",
+   "lane_id": "R745",
+   "beat": 16.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e754",
+   "lane_id": "R745",
+   "beat": 18.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e755",
+   "lane_id": "R745",
+   "beat": 20.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e756",
+   "lane_id": "R745",
+   "beat": 22.0,
+   "vel": 1.0,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e757",
+   "lane_id": "R745",
+   "beat": 24.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e758",
+   "lane_id": "R745",
+   "beat": 26.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e759",
+   "lane_id": "R745",
+   "beat": 28.0,
+   "vel": 1.0,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e760",
+   "lane_id": "R745",
+   "beat": 30.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e761",
+   "lane_id": "R745",
+   "beat": 32.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e762",
+   "lane_id": "R745",
+   "beat": 34.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e763",
+   "lane_id": "R745",
+   "beat": 36.0,
+   "vel": 0.7,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e765",
+   "lane_id": "R764",
+   "beat": 0.75,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e766",
+   "lane_id": "R764",
+   "beat": 1.0,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e767",
+   "lane_id": "R764",
+   "beat": 1.25,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e768",
+   "lane_id": "R764",
+   "beat": 1.5,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e769",
+   "lane_id": "R764",
+   "beat": 2.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e770",
+   "lane_id": "R764",
+   "beat": 2.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e771",
+   "lane_id": "R764",
+   "beat": 2.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e772",
+   "lane_id": "R764",
+   "beat": 2.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e773",
+   "lane_id": "R764",
+   "beat": 3.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e774",
+   "lane_id": "R764",
+   "beat": 3.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e775",
+   "lane_id": "R764",
+   "beat": 3.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e776",
+   "lane_id": "R764",
+   "beat": 4.0,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e777",
+   "lane_id": "R764",
+   "beat": 4.25,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e778",
+   "lane_id": "R764",
+   "beat": 4.5,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e779",
+   "lane_id": "R764",
+   "beat": 5.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e780",
+   "lane_id": "R764",
+   "beat": 5.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e781",
+   "lane_id": "R764",
+   "beat": 5.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e782",
+   "lane_id": "R764",
+   "beat": 5.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e783",
+   "lane_id": "R764",
+   "beat": 6.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e784",
+   "lane_id": "R764",
+   "beat": 6.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e785",
+   "lane_id": "R764",
+   "beat": 6.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e786",
+   "lane_id": "R764",
+   "beat": 6.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e787",
+   "lane_id": "R764",
+   "beat": 7.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e788",
+   "lane_id": "R764",
+   "beat": 7.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e789",
+   "lane_id": "R764",
+   "beat": 7.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e790",
+   "lane_id": "R764",
+   "beat": 7.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e791",
+   "lane_id": "R764",
+   "beat": 8.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e792",
+   "lane_id": "R764",
+   "beat": 8.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e793",
+   "lane_id": "R764",
+   "beat": 8.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e794",
+   "lane_id": "R764",
+   "beat": 8.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e795",
+   "lane_id": "R764",
+   "beat": 9.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e796",
+   "lane_id": "R764",
+   "beat": 9.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e797",
+   "lane_id": "R764",
+   "beat": 9.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e798",
+   "lane_id": "R764",
+   "beat": 9.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e799",
+   "lane_id": "R764",
+   "beat": 10.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e800",
+   "lane_id": "R764",
+   "beat": 10.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e801",
+   "lane_id": "R764",
+   "beat": 10.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e802",
+   "lane_id": "R764",
+   "beat": 10.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e803",
+   "lane_id": "R764",
+   "beat": 11.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e804",
+   "lane_id": "R764",
+   "beat": 11.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e805",
+   "lane_id": "R764",
+   "beat": 11.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e806",
+   "lane_id": "R764",
+   "beat": 11.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e807",
+   "lane_id": "R764",
+   "beat": 12.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e808",
+   "lane_id": "R764",
+   "beat": 12.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e809",
+   "lane_id": "R764",
+   "beat": 12.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e810",
+   "lane_id": "R764",
+   "beat": 12.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e811",
+   "lane_id": "R764",
+   "beat": 14.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e812",
+   "lane_id": "R764",
+   "beat": 14.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e813",
+   "lane_id": "R764",
+   "beat": 14.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e814",
+   "lane_id": "R764",
+   "beat": 14.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e815",
+   "lane_id": "R764",
+   "beat": 16.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e816",
+   "lane_id": "R764",
+   "beat": 16.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e817",
+   "lane_id": "R764",
+   "beat": 16.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e818",
+   "lane_id": "R764",
+   "beat": 16.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e819",
+   "lane_id": "R764",
+   "beat": 18.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e820",
+   "lane_id": "R764",
+   "beat": 18.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e821",
+   "lane_id": "R764",
+   "beat": 18.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e822",
+   "lane_id": "R764",
+   "beat": 18.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e823",
+   "lane_id": "R764",
+   "beat": 20.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e824",
+   "lane_id": "R764",
+   "beat": 20.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e825",
+   "lane_id": "R764",
+   "beat": 20.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e826",
+   "lane_id": "R764",
+   "beat": 20.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e827",
+   "lane_id": "R764",
+   "beat": 22.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e828",
+   "lane_id": "R764",
+   "beat": 22.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e829",
+   "lane_id": "R764",
+   "beat": 22.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e830",
+   "lane_id": "R764",
+   "beat": 22.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e831",
+   "lane_id": "R764",
+   "beat": 24.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e832",
+   "lane_id": "R764",
+   "beat": 24.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e833",
+   "lane_id": "R764",
+   "beat": 24.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e834",
+   "lane_id": "R764",
+   "beat": 24.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e835",
+   "lane_id": "R764",
+   "beat": 26.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e836",
+   "lane_id": "R764",
+   "beat": 26.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e837",
+   "lane_id": "R764",
+   "beat": 26.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e838",
+   "lane_id": "R764",
+   "beat": 26.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e839",
+   "lane_id": "R764",
+   "beat": 28.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e840",
+   "lane_id": "R764",
+   "beat": 28.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e841",
+   "lane_id": "R764",
+   "beat": 28.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e842",
+   "lane_id": "R764",
+   "beat": 28.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e843",
+   "lane_id": "R764",
+   "beat": 30.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e844",
+   "lane_id": "R764",
+   "beat": 30.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e845",
+   "lane_id": "R764",
+   "beat": 30.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e846",
+   "lane_id": "R764",
+   "beat": 30.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e847",
+   "lane_id": "R764",
+   "beat": 32.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e848",
+   "lane_id": "R764",
+   "beat": 32.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e849",
+   "lane_id": "R764",
+   "beat": 32.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e850",
+   "lane_id": "R764",
+   "beat": 32.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e851",
+   "lane_id": "R764",
+   "beat": 34.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e852",
+   "lane_id": "R764",
+   "beat": 34.25,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e853",
+   "lane_id": "R764",
+   "beat": 34.5,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e854",
+   "lane_id": "R764",
+   "beat": 34.75,
+   "vel": 0.6,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e855",
+   "lane_id": "R764",
+   "beat": 36.0,
+   "vel": 0.5,
+   "length": 0.25,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e857",
+   "lane_id": "R856",
+   "beat": 0.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e858",
+   "lane_id": "R856",
+   "beat": 4.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e859",
+   "lane_id": "R856",
+   "beat": 8.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e860",
+   "lane_id": "R856",
+   "beat": 12.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e861",
+   "lane_id": "R856",
+   "beat": 16.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e862",
+   "lane_id": "R856",
+   "beat": 20.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e863",
+   "lane_id": "R856",
+   "beat": 24.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e864",
+   "lane_id": "R856",
+   "beat": 28.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e865",
+   "lane_id": "R856",
+   "beat": 32.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e866",
+   "lane_id": "R856",
+   "beat": 36.0,
+   "vel": 0.6,
+   "length": 0.5,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e868",
+   "lane_id": "R867",
+   "beat": 0.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e869",
+   "lane_id": "R867",
+   "beat": 1.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e870",
+   "lane_id": "R867",
+   "beat": 2.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e871",
+   "lane_id": "R867",
+   "beat": 3.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e872",
+   "lane_id": "R867",
+   "beat": 4.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e873",
+   "lane_id": "R867",
+   "beat": 5.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e874",
+   "lane_id": "R867",
+   "beat": 6.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e875",
+   "lane_id": "R867",
+   "beat": 7.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e876",
+   "lane_id": "R867",
+   "beat": 8.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e877",
+   "lane_id": "R867",
+   "beat": 9.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e878",
+   "lane_id": "R867",
+   "beat": 10.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e879",
+   "lane_id": "R867",
+   "beat": 11.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e880",
+   "lane_id": "R867",
+   "beat": 12.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e881",
+   "lane_id": "R867",
+   "beat": 14.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e882",
+   "lane_id": "R867",
+   "beat": 15.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e883",
+   "lane_id": "R867",
+   "beat": 16.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e884",
+   "lane_id": "R867",
+   "beat": 17.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e885",
+   "lane_id": "R867",
+   "beat": 18.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e886",
+   "lane_id": "R867",
+   "beat": 19.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e887",
+   "lane_id": "R867",
+   "beat": 20.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e888",
+   "lane_id": "R867",
+   "beat": 21.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e889",
+   "lane_id": "R867",
+   "beat": 22.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e890",
+   "lane_id": "R867",
+   "beat": 24.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e891",
+   "lane_id": "R867",
+   "beat": 25.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e892",
+   "lane_id": "R867",
+   "beat": 26.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e893",
+   "lane_id": "R867",
+   "beat": 27.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e894",
+   "lane_id": "R867",
+   "beat": 28.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e895",
+   "lane_id": "R867",
+   "beat": 30.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e896",
+   "lane_id": "R867",
+   "beat": 31.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e897",
+   "lane_id": "R867",
+   "beat": 32.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e898",
+   "lane_id": "R867",
+   "beat": 33.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e899",
+   "lane_id": "R867",
+   "beat": 34.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 48,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e900",
+   "lane_id": "R867",
+   "beat": 35.0,
+   "vel": 0.7,
+   "length": 1.0,
+   "pitch": 41,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1011",
+   "lane_id": "R856",
+   "beat": 2.0,
+   "vel": 0.85,
+   "length": 0,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1012",
+   "lane_id": "R901",
+   "beat": 0.0,
+   "vel": 1.0,
+   "length": 0.14541496598639456,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1013",
+   "lane_id": "R901",
+   "beat": 7.25,
+   "vel": 0.4000444565451954,
+   "length": 0.420087679516251,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1014",
+   "lane_id": "R901",
+   "beat": 7.75,
+   "vel": 0.43528813973895486,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1015",
+   "lane_id": "R901",
+   "beat": 8.25,
+   "vel": 0.4456369385023249,
+   "length": 0.14541496598639456,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1016",
+   "lane_id": "R901",
+   "beat": 9.0,
+   "vel": 0.414891049784806,
+   "length": 0.2100438397581255,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1017",
+   "lane_id": "R901",
+   "beat": 9.25,
+   "vel": 0.41977489125879014,
+   "length": 0.14541496598639456,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1018",
+   "lane_id": "R901",
+   "beat": 9.75,
+   "vel": 0.4,
+   "length": 0.5170309901738473,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1019",
+   "lane_id": "R901",
+   "beat": 10.25,
+   "vel": 0.4100931670856674,
+   "length": 0.2585154950869237,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1020",
+   "lane_id": "R901",
+   "beat": 11.25,
+   "vel": 0.4056366271245265,
+   "length": 0.5170309901738473,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1021",
+   "lane_id": "R901",
+   "beat": 11.75,
+   "vel": 0.4,
+   "length": 0.9855903250188964,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1022",
+   "lane_id": "R901",
+   "beat": 12.75,
+   "vel": 0.403340106003325,
+   "length": 0.4847165532879818,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1023",
+   "lane_id": "R901",
+   "beat": 13.5,
+   "vel": 0.4089438363921231,
+   "length": 0.35545880574452005,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1024",
+   "lane_id": "R901",
+   "beat": 14.0,
+   "vel": 0.4195184707897924,
+   "length": 0.2746727135298564,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1025",
+   "lane_id": "R901",
+   "beat": 14.5,
+   "vel": 0.4151229026915896,
+   "length": 0.2423582766439909,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1026",
+   "lane_id": "R901",
+   "beat": 15.0,
+   "vel": 0.4,
+   "length": 0.35545880574452005,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1027",
+   "lane_id": "R901",
+   "beat": 15.25,
+   "vel": 0.4,
+   "length": 0.4524021164021164,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1028",
+   "lane_id": "R901",
+   "beat": 15.75,
+   "vel": 0.4,
+   "length": 0.46855933484504914,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1029",
+   "lane_id": "R901",
+   "beat": 16.25,
+   "vel": 0.4,
+   "length": 0.4524021164021164,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1030",
+   "lane_id": "R901",
+   "beat": 16.75,
+   "vel": 0.4,
+   "length": 0.43624489795918364,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1031",
+   "lane_id": "R901",
+   "beat": 17.25,
+   "vel": 0.4,
+   "length": 0.9048042328042328,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1032",
+   "lane_id": "R901",
+   "beat": 18.25,
+   "vel": 0.4,
+   "length": 0.8563325774754346,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1033",
+   "lane_id": "R901",
+   "beat": 19.0,
+   "vel": 0.4,
+   "length": 1.6480362811791385,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1087",
+   "lane_id": "R938",
+   "beat": 0.0,
+   "vel": 1.0,
+   "length": 0.1615721844293273,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1088",
+   "lane_id": "R938",
+   "beat": 2.5,
+   "vel": 0.46599388960333843,
+   "length": 0.6624459561602418,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1089",
+   "lane_id": "R938",
+   "beat": 4.25,
+   "vel": 0.4413841252913904,
+   "length": 1.0825336356764927,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1090",
+   "lane_id": "R938",
+   "beat": 6.0,
+   "vel": 0.44368767256427266,
+   "length": 0.775546485260771,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1091",
+   "lane_id": "R938",
+   "beat": 7.5,
+   "vel": 0.47557222776075037,
+   "length": 0.3877732426303855,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1092",
+   "lane_id": "R938",
+   "beat": 9.25,
+   "vel": 0.4780463769378157,
+   "length": 0.46855933484504914,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1093",
+   "lane_id": "R938",
+   "beat": 10.75,
+   "vel": 0.4665085137884645,
+   "length": 0.5008737717309146,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1094",
+   "lane_id": "R938",
+   "beat": 12.25,
+   "vel": 0.42934334545838626,
+   "length": 0.7109176114890401,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1095",
+   "lane_id": "R938",
+   "beat": 13.75,
+   "vel": 0.45675255163493644,
+   "length": 0.5331882086167801,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1096",
+   "lane_id": "R938",
+   "beat": 16.5,
+   "vel": 0.41977428176201786,
+   "length": 1.9388662131519272,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1097",
+   "lane_id": "R938",
+   "beat": 19.25,
+   "vel": 0.6480245916828189,
+   "length": 0.14541496598639456,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1098",
+   "lane_id": "R938",
+   "beat": 19.5,
+   "vel": 0.6493793134119269,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1099",
+   "lane_id": "R938",
+   "beat": 19.75,
+   "vel": 0.6841090142943441,
+   "length": 0.17772940287226002,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1100",
+   "lane_id": "R938",
+   "beat": 20.0,
+   "vel": 0.6577848899480037,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1101",
+   "lane_id": "R938",
+   "beat": 20.5,
+   "vel": 0.7156288362543408,
+   "length": 0.2423582766439909,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1102",
+   "lane_id": "R938",
+   "beat": 21.0,
+   "vel": 0.6619858112790789,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1103",
+   "lane_id": "R938",
+   "beat": 21.0,
+   "vel": 0.6757723819336093,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1104",
+   "lane_id": "R938",
+   "beat": 21.5,
+   "vel": 0.6252877084205806,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1105",
+   "lane_id": "R938",
+   "beat": 21.5,
+   "vel": 0.613343214355865,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1106",
+   "lane_id": "R938",
+   "beat": 22.0,
+   "vel": 0.6125815040748331,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1107",
+   "lane_id": "R938",
+   "beat": 22.0,
+   "vel": 0.5370285525540439,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1108",
+   "lane_id": "R938",
+   "beat": 22.25,
+   "vel": 0.5904615290538011,
+   "length": 0.2100438397581255,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1109",
+   "lane_id": "R938",
+   "beat": 22.75,
+   "vel": 0.5716479837080796,
+   "length": 0.19388662131519274,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1110",
+   "lane_id": "R938",
+   "beat": 23.0,
+   "vel": 0.5160870363232738,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1111",
+   "lane_id": "R938",
+   "beat": 23.25,
+   "vel": 0.5115086805619897,
+   "length": 0.13916666666666666,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1112",
+   "lane_id": "R938",
+   "beat": 23.5,
+   "vel": 0.6158815259406953,
+   "length": 0.1615721844293273,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1113",
+   "lane_id": "R938",
+   "beat": 24.0,
+   "vel": 0.5023940172777372,
+   "length": 0.19388662131519274,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1114",
+   "lane_id": "R938",
+   "beat": 24.5,
+   "vel": 0.5292785238319367,
+   "length": 0.1615721844293273,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1115",
+   "lane_id": "R938",
+   "beat": 25.0,
+   "vel": 0.5322330178225307,
+   "length": 0.1615721844293273,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1116",
+   "lane_id": "R938",
+   "beat": 25.5,
+   "vel": 0.48956922027817823,
+   "length": 0.17772940287226002,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1117",
+   "lane_id": "R938",
+   "beat": 26.25,
+   "vel": 0.4651690166291735,
+   "length": 0.14541496598639456,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1118",
+   "lane_id": "R938",
+   "beat": 26.75,
+   "vel": 0.4465862066249856,
+   "length": 0.2262010582010582,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1119",
+   "lane_id": "R938",
+   "beat": 27.5,
+   "vel": 0.4351652799756881,
+   "length": 0.2100438397581255,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  },
+  {
+   "id": "e1120",
+   "lane_id": "R938",
+   "beat": 28.0,
+   "vel": 0.4221692667894614,
+   "length": 0.3716160241874527,
+   "pitch": null,
+   "tune": 0,
+   "eq": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   "src_t": null,
+   "src_dur": null
+  }
+ ]
+}

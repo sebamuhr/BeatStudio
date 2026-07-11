@@ -1,0 +1,11 @@
+# Beat Studio (native desktop) — Python deps.
+# System package also needed for audio output: sudo apt install libportaudio2
+PySide6-Essentials>=6.7
+numpy>=1.26
+scipy>=1.11
+mido>=1.3
+sounddevice>=0.4
+# AI sound matching (CLAP) — install CPU torch first:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+transformers
+soundfile
