@@ -4,9 +4,11 @@ from_dict is tolerant of the WEB app's groove format (type/laneId/len) so groove
 phone records and syncs via server.py load straight into the desktop app.
 """
 from __future__ import annotations
+import base64
 import json
 import os
 import mido
+import numpy as np
 
 from .model import Project, Lane, Event
 
@@ -76,7 +78,40 @@ def save_project(p: Project, path: str):
 
 def load_project(path: str) -> Project:
     with open(path, "r", encoding="utf-8") as fh:
-        return from_dict(json.load(fh))
+        d = json.load(fh)
+    return from_dict(d.get("project", d))          # tolerate the {project, board} wrapper
+
+
+# ---- Separation Board (waveforms + drawn lines + FX) serialization for the .beat file ----
+def _enc_buf(buf) -> str:
+    return base64.b64encode(np.ascontiguousarray(buf, dtype=np.float32).tobytes()).decode("ascii")
+
+
+def _dec_buf(s: str):
+    return np.frombuffer(base64.b64decode(s), dtype=np.float32).copy()
+
+
+def serialize_board(snap) -> dict | None:
+    """Make a SeparationBoard.snapshot() JSON-safe: the take audio buffers become base64.
+    Track dicts (drawn points, params, FX, colour-hex) are already JSON-safe."""
+    if snap is None:
+        return None
+    takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"], "buf": _enc_buf(tk["buf"])}
+             for tk in snap.get("takes", [])]
+    return {"tracks": snap.get("tracks", []), "takes": takes,
+            "active_take": snap.get("active_take"), "bpm": snap.get("bpm"),
+            "n": snap.get("n"), "color_seq": snap.get("color_seq")}
+
+
+def deserialize_board(blob) -> dict | None:
+    """Inverse of serialize_board → a snapshot dict SeparationBoard.restore() understands."""
+    if blob is None:
+        return None
+    takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"], "buf": _dec_buf(tk["buf"])}
+             for tk in blob.get("takes", [])]
+    return {"tracks": blob.get("tracks", []), "takes": takes,
+            "active_take": blob.get("active_take"), "bpm": blob.get("bpm"),
+            "n": blob.get("n"), "color_seq": blob.get("color_seq")}
 
 
 NOTE_DRUM = {v: k for k, v in DRUM_NOTE.items()}   # reverse map for MIDI import
@@ -170,28 +205,40 @@ def import_midi(path: str) -> Project:
     return p
 
 
-def save_song(p: Project, path: str) -> str:
+def save_song(p: Project, path: str, board=None) -> str:
     """Save for BOTH worlds: a standard .mid (opens in any DAW) PLUS a full-fidelity .beat sidecar
-    (synths/FX/board/automation) next to it, so reopening here restores everything. Returns the .mid path."""
+    that stores the Studio project AND the whole Separation Board (recorded waveforms, drawn lines,
+    FX, automation), so reopening here restores everything. `board` = SeparationBoard.snapshot() or None.
+    Returns the .mid path."""
     base, ext = os.path.splitext(path)
     if ext.lower() != ".mid":
         path = base + ".mid"
     export_midi(p, path)
+    doc = {"project": to_dict(p), "board": serialize_board(board)}
     with open(base + ".beat", "w", encoding="utf-8") as fh:
-        json.dump(to_dict(p), fh, indent=1)
+        json.dump(doc, fh, indent=1)
     return path
 
 
-def open_song(path: str) -> Project:
-    """Open a .beat/.json project (full fidelity) or a .mid. For a .mid, prefer a matching .beat
-    sidecar (full fidelity) when present, otherwise import the raw MIDI notes."""
+def load_full(path: str):
+    """Return (Project, board_blob) from a .beat/.json. board_blob is a restore()-ready dict or None."""
+    with open(path, "r", encoding="utf-8") as fh:
+        d = json.load(fh)
+    if "project" in d:                              # new {project, board} format
+        return from_dict(d["project"]), deserialize_board(d.get("board"))
+    return from_dict(d), None                       # legacy flat project dict
+
+
+def open_song(path: str):
+    """Open a .beat/.json (full fidelity, incl. the board) or a .mid. For a .mid, prefer a matching
+    .beat sidecar when present, else import the raw MIDI notes. Returns (Project, board_blob|None)."""
     base, ext = os.path.splitext(path); ext = ext.lower()
     if ext in (".beat", ".json"):
-        return load_project(path)
+        return load_full(path)
     side = base + ".beat"
     if os.path.exists(side):
-        return load_project(side)
-    return import_midi(path)
+        return load_full(side)
+    return import_midi(path), None
 
 
 def list_synced(sync_dir: str):

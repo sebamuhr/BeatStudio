@@ -64,7 +64,7 @@ def mono(size):
 class Toolbar(QWidget):
     play = Signal(); stop = Signal(); record_master = Signal()
     open_separator = Signal()
-    save = Signal(); grooves = Signal(); my_sounds = Signal()
+    layout_toggled = Signal()                 # ⊟/⊞ — one-screen (docked) vs two-screen (separate windows)
     metronome = Signal(); bpm_changed = Signal(int)
     undo = Signal(); redo = Signal(); clear_all = Signal()
 
@@ -136,16 +136,20 @@ class Toolbar(QWidget):
         self.info.setTextFormat(Qt.RichText)
         lay.addWidget(self.info)
 
-        for txt, sig in (("Save", self.save), ("● Grooves", self.grooves), ("My Sounds", self.my_sounds)):
-            b = QPushButton(txt); b.setFixedHeight(54); b.setCursor(Qt.PointingHandCursor)
-            b.setFont(theme.sans(12, 600))
-            b.setStyleSheet(
-                "QPushButton{background:#101016;border:1px solid #2a2a36;border-radius:12px;"
-                "color:#d8d8e0;padding:0 16px;}QPushButton:hover{background:#16161e;}")
-            b.clicked.connect(sig.emit)
-            lay.addWidget(b)
+        # Layout toggle: 1 screen (separator + studio stacked in ONE window) / 2 screens (separate windows).
+        self.layout_btn = QPushButton("2 screens"); self.layout_btn.setFixedHeight(54)
+        self.layout_btn.setCursor(Qt.PointingHandCursor); self.layout_btn.setFont(theme.sans(12, 600))
+        self.layout_btn.setToolTip("Toggle layout: stack both in one window, or use two separate windows")
+        self.layout_btn.setStyleSheet(
+            "QPushButton{background:#101016;border:1px solid #2a2a36;border-radius:12px;"
+            "color:#d8d8e0;padding:0 16px;}QPushButton:hover{background:#16161e;}")
+        self.layout_btn.clicked.connect(self.layout_toggled.emit)
+        lay.addWidget(self.layout_btn)
 
         self.refresh_info()
+
+    def set_layout_mode(self, one_screen: bool):
+        self.layout_btn.setText("1 screen" if one_screen else "2 screens")
 
     def refresh_info(self):
         n = len(self.project.events)

@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QWidget, QComboBox, QScrollArea, QFrame, QLineEdit, QSizePolicy,
-                               QSpinBox, QSlider)
+                               QSpinBox, QSlider, QToolTip)
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QElapsedTimer, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 
@@ -793,7 +793,7 @@ class SeparationBoard(QWidget):
         self.preview_sound_cb = preview_sound_cb; self.stop_cb = stop_cb
         self._play_btn = None; self._sound_ph = QTimer(self); self._sound_ph.setSingleShot(True)
         self._sound_ph.timeout.connect(self._stop_playback)
-        self.tracks = []; self._n = 0; self._color_seq = 0; self._is_full = False
+        self.tracks = []; self._n = 0; self._color_seq = 0; self._is_full = False; self._docked = False
         self.takes = [{"id": "T0main", "buf": self.buf, "color": take_color(0), "name": "Main"}]
         self._active_take = self.takes[0]["id"]
         self.setWindowTitle("Separation Board — draw your sounds apart")
@@ -819,10 +819,17 @@ class SeparationBoard(QWidget):
         self.rec2_btn.clicked.connect(self.record_secondary_requested.emit)
         self._style_rec2(False)
         top.addSpacing(6); top.addWidget(self.rec2_btn)
-        head = QLabel("Record here, then <b>click the wave</b> to place points — <b>drag as you place</b> "
-                      "to curve the line (pen tool). Drag the round handles to reshape · scroll to zoom.")
-        head.setWordWrap(True); head.setStyleSheet("color:#c0c0cc;font-size:12px;")
-        top.addSpacing(10); top.addWidget(head, 1)
+        # tucked-away help: a small "?" that reveals the how-to only when clicked
+        help_txt = ("Record here, then click the wave to place points — drag as you place to curve the "
+                    "line (pen tool). Drag the round handles to reshape · scroll to zoom.")
+        self.help_btn = QPushButton("?"); self.help_btn.setFixedSize(24, 24)
+        self.help_btn.setCursor(Qt.PointingHandCursor); self.help_btn.setToolTip("How the Separation Board works")
+        self.help_btn.setStyleSheet("QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:12px;"
+                                    "color:#c0c0cc;font-weight:700;}QPushButton:hover{background:#1e1e28;}")
+        self.help_btn.clicked.connect(
+            lambda: QToolTip.showText(self.help_btn.mapToGlobal(self.help_btn.rect().bottomLeft()),
+                                      help_txt, self.help_btn))
+        top.addSpacing(10); top.addWidget(self.help_btn); top.addStretch(1)
         # tool selector: Pen (draw) · Grid (stretch tempo) · Fit (stretch a slice of audio)
         top.addWidget(self._dim("tool"))
         self._tool_btns = {}
@@ -896,7 +903,7 @@ class SeparationBoard(QWidget):
         live = QLabel("● live — tracks sync to the Studio as you draw")
         live.setStyleSheet("color:#6ef0a8;font-size:11px;")
         btns.addSpacing(16); btns.addWidget(live); btns.addStretch(1)
-        close = QPushButton("Close"); close.clicked.connect(self.hide)
+        self.b_close = close = QPushButton("Close"); close.clicked.connect(self.hide)
         close.setStyleSheet("QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:8px;color:#d8d8e0;padding:8px 16px;}")
         btns.addWidget(close)
         root.addLayout(btns)
@@ -1269,10 +1276,16 @@ class SeparationBoard(QWidget):
             self.showFullScreen(); self.b_full.setText("⛶ Exit full screen")
         self._is_full = not self._is_full
 
+    def set_docked(self, docked: bool):
+        """Docked = embedded in the Studio window (one-screen). Hide the window-only chrome then."""
+        self._docked = docked
+        self.b_full.setVisible(not docked)
+        self.b_close.setVisible(not docked)
+
     def keyPressEvent(self, ev):
-        if ev.key() == Qt.Key_F11:
+        if ev.key() == Qt.Key_F11 and not self._docked:
             self._toggle_full(); return
-        if ev.key() == Qt.Key_Escape:
+        if ev.key() == Qt.Key_Escape and not self._docked:   # docked: Escape must not hide the pane
             if self._is_full:
                 self._toggle_full()
             else:

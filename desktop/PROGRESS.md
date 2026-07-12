@@ -1,8 +1,31 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.26.2** (shown in the window title bar as
-`Beat Studio · v0.26.2 · AI matching ✓`).
+continuing in a new chat.** Current version: **v0.27.0** (shown in the window title bar as
+`Beat Studio · v0.27.0`).
+
+## v0.27.0 — save-ALL (separator too) · 1/2-screen layout · "?" help · removed Save/Grooves/My Sounds + AI
+Four things:
+- **Save now stores the WHOLE Separation Board too** (was Studio-only). The `.beat` sidecar is now
+  `{"project": to_dict(p), "board": <serialized board>}`. `persistence.serialize_board()` base64-encodes
+  the take **audio buffers** (JSON-safe) alongside the track dicts (drawn points, params, FX, colour-hex);
+  `deserialize_board()` inverts it. `save_song(p, path, board=snapshot)`; `open_song()`/`load_full()` now
+  return **(Project, board_blob)**. `MainWindow._save_project` passes `self._board.snapshot()`;
+  `_load_fresh(p, board_blob)` recreates+`restore()`s the board and sets `_orig_rec` from the main take so
+  play-original works. Old flat `.beat`/`.json` still load. Verified: waves + lines + FX survive a
+  save→open into a fresh window.
+- **1-screen / 2-screen layout toggle** (toolbar button, replaces the old text buttons). Two-screen =
+  today (board is a separate window). One-screen = the board **docks ABOVE the Studio in a vertical
+  `QSplitter`** (separator top, studio bottom, one window) — each pane is independently resizable and
+  scrolls on its own. `MainWindow._toggle_layout/_dock_board/_float_board` reparent the board (strip/add
+  `Qt.Window`); `SeparationBoard.set_docked()` hides the Full-screen/Close chrome + guards Escape when
+  docked. `_make_board`/`_show_board` dock automatically when in one-screen mode.
+- **"?" help popover** on the board: the old always-on how-to sentence is now a small `?` button
+  (`separationboard`, `QToolTip.showText` on click).
+- **Removed**: the toolbar **Save / ● Grooves / My Sounds** buttons (Save stays on File ▸ Save / Ctrl+S),
+  the **File ▸ Grooves** item, and the entire **AI** feature (menu, arrange, CLAP preload, AI title tag,
+  `ai_match`/`config`/`arrange`/`aidialog` imports, `_open_grooves`/`_open_my_sounds`). `requirements.txt`
+  had already dropped torch/transformers to opt-in. `calc_done`/master-record path kept (not AI).
 
 ## ⚙️ REPO & INSTALL (as of this session — 2026-07-11)
 - **Beat is now its OWN git repo** at `~/Documents/APPS/Beat`, remote

@@ -2,7 +2,8 @@
 classic DAW scroll-syncing (ruler follows horizontal scroll, headers follow vertical)."""
 import os
 import numpy as np
-from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QGridLayout, QFrame, QFileDialog)
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
+                               QSplitter)
 from PySide6.QtGui import QPainter, QPen, QColor, QKeySequence, QShortcut, QAction
 from PySide6.QtCore import Qt, QTimer
 
@@ -27,12 +28,7 @@ from .separationboard import SeparationBoard, SILENCE
 from .minimap import Minimap
 from .beateq import BeatEQ
 from .sounds import SoundLibrary
-from .soundsdialog import SoundsDialog
 from . import persistence
-from . import ai_match
-from . import config as appconfig
-from . import arrange as arranger
-from .aidialog import AISettingsDialog
 from . import __version__
 import threading
 
@@ -54,7 +50,6 @@ def _interp_v(points, t, default):
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # .../desktop
 _PROJECTS_DIR = os.path.join(_HERE, "projects")
-_SYNC_DIR = os.path.join(os.path.dirname(_HERE), "synced")           # Beat/synced (phone sync)
 _MYSOUNDS_DIR = os.path.join(_HERE, "mysounds")
 
 
@@ -76,8 +71,6 @@ class CornerBox(QFrame):
 
 class MainWindow(QMainWindow):
     from PySide6.QtCore import Signal as _Signal
-    ai_loaded = _Signal(bool)
-    arrange_done = _Signal(object, str)   # (Project|None, error message)
     calc_done = _Signal(object, int)      # (cleaned take array, bpm) after a master recording
 
     def __init__(self, project: Project | None = None):
@@ -105,7 +98,14 @@ class MainWindow(QMainWindow):
         g.setColumnStretch(1, 1); g.setRowStretch(1, 1)
         # panel frame around the grid
         grid_host.setStyleSheet("")
-        root.addWidget(grid_host, 1)
+        self._grid_host = grid_host
+        # A vertical splitter is the home for the studio; in one-screen mode the Separation Board
+        # docks ABOVE it (each pane resizable + scrolls on its own, like two windows).
+        self._split = QSplitter(Qt.Vertical); self._split.setChildrenCollapsible(False)
+        self._split.setHandleWidth(6)
+        self._split.addWidget(grid_host)
+        root.addWidget(self._split, 1)
+        self._one_screen = False
 
         # bottom settings panel (hidden until you open a track's gear)
         self.settings = SettingsPanel(self.project)
@@ -148,9 +148,7 @@ class MainWindow(QMainWindow):
         self.toolbar.bpm_changed.connect(self._set_bpm)
         self.toolbar.record_master.connect(self._toggle_master_record)
         self.toolbar.open_separator.connect(self._open_separator)
-        self.toolbar.save.connect(self._save_project)
-        self.toolbar.grooves.connect(self._open_grooves)
-        self.toolbar.my_sounds.connect(self._open_my_sounds)
+        self.toolbar.layout_toggled.connect(self._toggle_layout)
         self.toolbar.undo.connect(self._undo)
         self.toolbar.redo.connect(self._redo)
         self.toolbar.clear_all.connect(self._clear_beats_confirm)
@@ -163,11 +161,6 @@ class MainWindow(QMainWindow):
         self._refresh_undo_buttons()
 
         self._build_menu()
-        # Preload the CLAP AI model in the background so extraction never blocks the UI.
-        self._ai_ready = False
-        self.ai_loaded.connect(self._on_ai_loaded)
-        if ai_match.available():
-            threading.Thread(target=self._preload_ai, daemon=True).start()
         QShortcut(QKeySequence(Qt.Key_Space), self, activated=self._toggle_play)
         QShortcut(QKeySequence("Ctrl+Z"), self, activated=self._undo)
         QShortcut(QKeySequence("Ctrl+Shift+Z"), self, activated=self._redo)
@@ -183,9 +176,6 @@ class MainWindow(QMainWindow):
         self._paused_beat = None    # set while the transport is paused, None when stopped/playing
         self.library = SoundLibrary(_MYSOUNDS_DIR)
         self.usermodel = UserModel(os.path.join(_HERE, "usermodel"))   # learns your kit from labels
-        self.cfg = appconfig.load()                                    # AI server settings
-        self._arranging = False
-        self.arrange_done.connect(self._on_arrange_done)
         self.calc_done.connect(self._on_calc_done)
         self._busy = None
         self._board = None            # the persistent Separation Board (always-on golden surface)
@@ -202,27 +192,9 @@ class MainWindow(QMainWindow):
         if not self.engine.available:
             self._set_title("(no audio device: sudo apt install libportaudio2)")
 
-    def _preload_ai(self):
-        ok = ai_match.load()
-        if ok:
-            try:
-                ai_match.instrument_refs()      # prebuild so the first extraction is instant
-            except Exception:
-                pass
-        self.ai_loaded.emit(bool(ok))      # thread-safe: queued to the main thread
-
-    def _on_ai_loaded(self, ok):
-        self._ai_ready = ok
-        self._set_title()
-
-    def _ai_tag(self):
-        if not ai_match.available():
-            return "AI off (DSP matching)"
-        return "AI matching ✓" if getattr(self, "_ai_ready", False) else "AI loading…"
-
     def _set_title(self, note: str = ""):
-        """Always show the version + AI status so you know which build/mode is live."""
-        base = f"Beat Studio · v{__version__}  ·  {self._ai_tag()}"
+        """Show the version so you know which build is live."""
+        base = f"Beat Studio · v{__version__}"
         self.setWindowTitle(f"{base}  —  {note}" if note else base)
 
     def showEvent(self, ev):
@@ -238,66 +210,15 @@ class MainWindow(QMainWindow):
                                (None, None, None),
                                ("Open (MIDI / project)…", "Ctrl+O", self._open_project),
                                ("Save (MIDI + project)…", "Ctrl+S", self._save_project),
-                               ("Export MIDI (notes only)…", "Ctrl+E", self._export_midi),
-                               ("Grooves (phone sync)…", "Ctrl+G", self._open_grooves)):
+                               ("Export MIDI (notes only)…", "Ctrl+E", self._export_midi)):
             if label is None:
                 m.addSeparator(); continue
             a = QAction(label, self); a.setShortcut(QKeySequence(key)); a.triggered.connect(fn)
             m.addAction(a)
-        ai = self.menuBar().addMenu("AI")
-        a = QAction("✨ Arrange into a full track", self)
-        a.setShortcut(QKeySequence("Ctrl+R")); a.triggered.connect(self._arrange_with_ai)
-        ai.addAction(a)
-        ai.addSeparator()
-        s = QAction("AI Server Settings…", self); s.triggered.connect(self._open_ai_settings)
-        ai.addAction(s)
         self.menuBar().setStyleSheet("QMenuBar{background:#0d0d12;color:#c0c0cc;}"
                                      "QMenuBar::item:selected{background:#1e1e28;}"
                                      "QMenu{background:#13131b;color:#d8d8e0;border:1px solid #2a2a36;}"
                                      "QMenu::item:selected{background:#2a2a36;}")
-
-    def _open_ai_settings(self):
-        dlg = AISettingsDialog(self.cfg, self)
-        if dlg.exec() == AISettingsDialog.Accepted:
-            self.cfg = appconfig.load()
-            self._set_title("AI server saved")
-
-    def _arrange_with_ai(self):
-        """Send the current groove to the home-server model → get back a full arrangement.
-        Runs off the UI thread; the result replaces the project (undoable)."""
-        if self._arranging:
-            return
-        if not appconfig.ai_configured(self.cfg):
-            self._open_ai_settings()
-            if not appconfig.ai_configured(self.cfg):
-                return
-        if not self.project.events:
-            self._set_title("nothing to arrange — record or add beats first")
-            return
-        self._arranging = True
-        self._set_title("✨ arranging with AI… (asking your server)")
-        snapshot = persistence.to_dict(self.project)
-
-        def work():
-            try:
-                proj = arranger.arrange(self._project_from_dict(snapshot), self.cfg)
-                self.arrange_done.emit(proj, "")
-            except Exception as e:
-                self.arrange_done.emit(None, str(e))
-        threading.Thread(target=work, daemon=True).start()
-
-    def _project_from_dict(self, d):
-        return persistence.from_dict(d)
-
-    def _on_arrange_done(self, proj, err):
-        self._arranging = False
-        if proj is None:
-            self._set_title(f"AI arrange failed: {err[:80]}")
-            return
-        self._set_project(proj)              # swaps project on every sub-widget (like undo/open)
-        self._commit()                       # Ctrl+Z restores the pre-arrange groove
-        self._rerender_if_playing()
-        self._set_title("✨ arranged — tweak away")
 
     def _new_project(self):
         self._orig_rec = None; self._lane_audio = {}
@@ -326,11 +247,24 @@ class MainWindow(QMainWindow):
                                               os.path.join(_PROJECTS_DIR, "groove.mid"),
                                               "MIDI file (*.mid)")
         if path:
-            saved = persistence.save_song(self.project, path)
+            board = self._board.snapshot() if self._board is not None else None
+            saved = persistence.save_song(self.project, path, board=board)
             self.statusBar().showMessage(f"Saved {os.path.basename(saved)} (+ .beat project)", 4000)
 
-    def _load_fresh(self, p):
+    def _load_fresh(self, p, board_blob=None):
         self._set_project(p)
+        if board_blob is not None:                 # restore the Separation Board (waves, lines, FX)
+            takes = board_blob.get("takes") or []
+            main = np.asarray(takes[0]["buf"], np.float32) if takes else np.zeros(SR // 2, np.float32)
+            self._orig_rec = main                  # so play-original / previews work again
+            self._syncing = True                   # keep _make_board's resync from wiping loaded lanes
+            try:
+                if self._board is None:
+                    self._make_board(main, p.bpm)
+                self._board.restore(board_blob)
+            finally:
+                self._syncing = False
+            self._resync_all_board()
         self._committed = self._snapshot()
         self._undo_stack.clear(); self._redo_stack.clear()
 
@@ -339,7 +273,8 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Open (MIDI or project)", _PROJECTS_DIR,
                                               "Song (*.mid *.beat *.json);;All files (*)")
         if path:
-            self._load_fresh(persistence.open_song(path))
+            proj, board_blob = persistence.open_song(path)
+            self._load_fresh(proj, board_blob)
 
     def _export_midi(self):
         """Notes-only MIDI export (no .beat sidecar)."""
@@ -347,12 +282,6 @@ class MainWindow(QMainWindow):
                                               os.path.join(_HERE, "groove.mid"), "MIDI file (*.mid)")
         if path:
             persistence.export_midi(self.project, path)
-
-    def _open_grooves(self):
-        start = _SYNC_DIR if os.path.isdir(_SYNC_DIR) else _HERE
-        path, _ = QFileDialog.getOpenFileName(self, "Open a synced groove", start, "Groove (*.json)")
-        if path:
-            self._load_fresh(persistence.load_project(path))
 
     # ---- header buttons ----
     def _on_header_action(self, lane_id: str, act: str):
@@ -577,27 +506,71 @@ class MainWindow(QMainWindow):
         board.playhead_moved.connect(self._on_board_playhead)
         self._board = board
         self._resync_all_board()
+        if self._one_screen:
+            self._dock_board()
         return board
 
     def _show_board(self):
-        """Show/raise the board WITHOUT changing its window state — so it stays full-screen if it
-        already is (showNormal() was yanking it out of full screen on Stop)."""
+        """Show/raise the board. In one-screen mode it lives docked in the splitter (always visible);
+        in two-screen mode it's a separate window (keep its full-screen state, don't yank it out)."""
         b = self._board
         if b is None:
+            return
+        if self._one_screen:
+            self._dock_board()
             return
         if not b.isVisible():
             b.show()
         b.raise_(); b.activateWindow()
 
     def _open_separator(self):
-        """Open/show the Separation Board — a SEPARATE window (park it on your 2nd monitor). It
-        keeps all its work when you close and reopen it (this button just re-shows the same one)."""
+        """Open/show the Separation Board. In one-screen mode it docks above the Studio; in two-screen
+        mode it's a separate window that keeps all its work between open/close."""
         if self._board is None:
             hp = self._orig_rec if self._orig_rec is not None else np.zeros(SR // 2, np.float32)
             self._make_board(hp, self.project.bpm)
             if self._orig_rec is None:
                 self._set_title("Separator open — record a master take to fill it")
         self._show_board()
+
+    # ---- one-screen (docked) vs two-screen (separate windows) ----
+    def _toggle_layout(self):
+        self._one_screen = not self._one_screen
+        self.toolbar.set_layout_mode(self._one_screen)
+        if self._one_screen:
+            if self._board is None:
+                hp = self._orig_rec if self._orig_rec is not None else np.zeros(SR // 2, np.float32)
+                self._make_board(hp, self.project.bpm)     # docks itself (one_screen is set)
+            else:
+                self._dock_board()
+        else:
+            self._float_board()
+
+    def _dock_board(self):
+        """Embed the board ABOVE the Studio in the splitter (separator on top, studio on bottom)."""
+        b = self._board
+        if b is None:
+            return
+        if not getattr(b, "_docked", False):
+            if getattr(b, "_is_full", False):
+                b.showNormal()
+            b.setParent(None); b.setWindowFlag(Qt.Window, False)
+            self._split.insertWidget(0, b)               # index 0 = top pane
+            h = max(self.centralWidget().height(), 640)
+            self._split.setSizes([int(h * 0.5), int(h * 0.5)])
+        b.set_docked(True)
+        b.show()
+
+    def _float_board(self):
+        """Pop the board back out into its own separate window (two-screen mode)."""
+        b = self._board
+        if b is None:
+            return
+        if getattr(b, "_docked", False):
+            b.setParent(None); b.setWindowFlag(Qt.Window, True)
+            b.resize(1180, 700)
+        b.set_docked(False)
+        b.showNormal(); b.raise_(); b.activateWindow()
 
     def _on_calc_done(self, hp, bpm):
         """A master recording finished: load the take into the Separation Board (a separate window).
@@ -836,14 +809,6 @@ class MainWindow(QMainWindow):
         if self.engine.playing:
             buf, self._spb = render_project(self.project, self._samples, orig=self._orig_rec)
             self.engine.set_buffer(buf)
-
-    def _open_my_sounds(self):
-        dlg = SoundsDialog(self.library, self.engine.one_shot, self)
-        dlg.exec()
-        self._samples = self.library.samples_dict()
-        self.settings.set_my_sounds(self.library.sounds)
-        self.timeline.viewport().update()
-        self._rerender_if_playing()
 
     def _on_settings_changed(self):
         self.headers.update(); self.timeline.viewport().update(); self.toolbar.refresh_info()
