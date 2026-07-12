@@ -1,8 +1,168 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.27.0** (shown in the window title bar as
-`Beat Studio · v0.27.0`).
+continuing in a new chat.** Current version: **v0.31.0** (shown in the window title bar as
+`Beat Studio · v0.31.0`).
+
+## v0.31.0 — NOTES: vertical scroll (whole piano) + notes-created points are time-locked
+- **Scroll the piano up/down.** The NOTES view now shows a **NOTE_SPAN=30**-semitone window that
+  **scrolls the full piano** (`PIANO_MIN..PIANO_MAX` = A0..C8) with the mouse wheel (plain wheel =
+  vertical scroll; **Ctrl+wheel** = horizontal zoom). `_fit_note_range` centres the window on the
+  take's detected notes; `_scroll_notes(ds)` shifts + clamps it. So higher/lower notes that used to be
+  off-screen are reachable. Verified: window 42–72 on entry, scrolls, clamps to 21/108.
+- **Notes-created points have a LOCKED horizontal position.** A point placed in NOTES carries
+  `from_notes=True`; in the VOLUME tab its **time is locked** and dragging changes **only its volume**
+  (v). Verified: a from_notes point dragged in Volume keeps t (0.375) and only v changes (0.80→0.30).
+  Volume-created points still move freely in time. (Time is owned by the Notes tab.)
+
+## v0.30.1 — NOTES fill: amplitude decides WHERE, pitch decides HEIGHT (one breath = one fill)
+User: singing "paaaaaummm" (one continuous sound) was chopped into "paa aaa aa au mmm" — pYIN drops
+pitch on the consonants (p/m) and breath dips, and the old bridge needed detected pitch on BOTH sides
+of a gap. Rewrote the `_paint_notes` fill: a **smoothed amplitude envelope** marks contiguous runs of
+SOUND (`sm > 0.04`), and within each run the pitch is **interpolated across the dropouts**
+(`np.interp` over the run's detected frames) — so one continuous vocalisation is ONE continuous fill
+(stepping/ gliding through its pitches), while a real silence between notes still splits it. Verified:
+a tone→noise→tone→noise→tone "word" renders as one unbroken fill climbing A3→B3→C4
+(`scratchpad/paum.png`). Display-only change; `board_check` still green.
+
+## v0.30.0 — Volume & Notes are ONE set of points (pitch + volume) · notes drive pitched playback
+Big model correction from the user: **Volume and Notes are two VIEWS of the SAME points**, not two
+separate lists. Each point (a beat) now carries a **time**, a **volume** (its height in Volume), and a
+**pitch/`midi`** (its height in Notes). Add a point in Notes → it's the same beat in Volume, where you
+drag it up/down for loudness only; its time is shared.
+- **Merged** the old separate `tr["notes"]` back into `tr["points"]` with a `midi` field
+  (`DEF_MIDI=60`=C4 default, so existing drums stay natural). `_notes_press/_notes_move/_notes_hit/
+  _notes_release` + the notes-mode draw all operate on `points` now; Volume-mode point creation seeds
+  `midi=DEF_MIDI`. Placing in NOTES seeds `v=0.8`. Verified: a point placed in NOTES shows in BOTH
+  tabs (`scratchpad/u_notes.png` + `u_volume.png`, same 4 points).
+- **Notes now PLAY at their pitch** (Phase 2 core): `_lane_events` sets `Event.pitch=pt.midi`;
+  `render._voice_for` **resamples a drum** to that note (`synth.sample_voice`, natural at
+  `_DRUM_REF=60`) so a **tom really toms up/down** (verified: tom @60 len 10584 → @72 len 5292, exactly
+  an octave). Synth/sample already used `Event.pitch`. `_preview_note` (gutter audition) uses the same
+  C4=natural reference.
+- **Fill continuity:** pYIN keeps lower-confidence frames now (`vprob>0.2`, was 0.5) and the gap-bridge
+  tolerates quieter gaps (amp≥0.02) with a higher alpha floor, so a held sung note reads as one
+  continuous fill instead of spots/gaps.
+- STILL OPEN (user asked): the board **Play Mix/Original/Both** buttons should "play what I see" — the
+  recording. Play Original already plays `_orig_rec`; Mix plays the placed points (now pitched). Confirm
+  this matches the ask or make all three prefer the raw take.
+
+## v0.29.3 — NOTES: continuous fill (no cuts) · placing notes works · piano-key audition
+Real-take feedback on NOTES mode, three fixes:
+- **Continuous fill for a sustained note.** pYIN drops a few voiced frames mid-note, so constant
+  singing showed as separate blocks. `_paint_notes` now bridges a pitch dropout **only while the
+  sound keeps going through it** (`amp.min() >= 0.05` across the gap) — one held note = one
+  continuous fill, but two notes with a dip between stay separate. Verified: a vibrato'd A3 hum
+  renders as ONE hill (`scratchpad/notes3.png`).
+- **Placing notes works now.** In NOTES mode there's no per-track lane to click, so notes go to the
+  ACTIVE track — and if none was active, clicks did nothing. `_notes_press` now auto-selects the
+  first track (`set_active(0)`) and shows an "Add a track" hint when there are none. Placed notes
+  render as a bright white dot + a coloured block on the lane (clearly visible on the fill).
+- **Piano-key audition (start of Phase 2).** Clicking a key in the gutter plays the ACTIVE track's
+  instrument AT THAT NOTE: canvas `key_pressed=Signal(int)` (emitted for a gutter click) →
+  `SeparationBoard._on_key_pressed` → `MainWindow._preview_note(kind, sound, params, midi)`. Synth
+  plays `synth.voice` at that freq; a **drum/sample is RESAMPLED** (`synth.sample_voice`, drums
+  around C3=48) so a **tom really toms up/down**. Verified: gutter click emits the right MIDI; drum
+  + synth previews render.
+- NEXT (rest of Phase 2): make the PLACED notes drive playback/render (each note → an `Event` with
+  `pitch`, instrument resampled/oscillated), so the drawn melody actually plays back in the Studio.
+
+## v0.29.2 — VOLUME mode: 0 baseline moved to the BOTTOM (half-wave up) + ribbon strip retired
+User: the mirrored bottom half of the volume wave was wasted; move 0 to the bottom and draw a
+half-wave going up (more room to draw). Done: `_band` now returns the baseline near the row bottom
+(`top + bh - 8`) with usable height `bh - 26`, so `_to_px`/`_from_px` map v=0→bottom, v=1→top with
+no other call-site changes. The waveform + live-record envelope draw from the baseline UPWARD only
+(`cy → cy-a`, was `cy±a`). The 0–10 scale now reads 0 at the bottom, 10 at the top. Verified: points
+at v=0.9/0.3/0.7 land at ~9/3/7 and the wave is a half-wave from the bottom (`scratchpad/volume.png`);
+full `board_check` still green. Also **removed the v0.28 note-ribbon strip** from volume mode (it's
+superseded by NOTES mode and would overlap the taller half-wave); `groove.pitch_ribbon` + `_pitch_color`
++ the hover label stay (used by NOTES). `_draw_ribbon` is now unused (left in place, harmless).
+
+## v0.29.1 — NOTES mode: pitch drawn as a FILLED silhouette (not spots) + shorter piano black keys
+User feedback on v0.29.0: the pitch showed as isolated "spots" (amplitude dabs centred on the note),
+so you couldn't read the melody's flow. Fixed: `_paint_notes` now draws each column **filled from the
+BOTTOM of the grid up to the note** — a coloured silhouette whose **top edge traces your singing** (go
+up to C4 → the whole column under C4 fills, so C4 is the readable top). Tiny pitch dropouts are
+**bridged** (linear interp across gaps ≤ ~2% of view width) so sparse detection still reads as a
+continuous contour; fill alpha scales with amplitude (louder = more solid); a bright top-edge line
+marks the note. Verified: a C4→G4→D4 glide renders as one continuous red→green→blue mountain
+(`scratchpad/notes2.png`). Black keys in the gutter made shorter/narrower (`KB*0.55`, `lh*0.7`).
+- STILL OPEN (user asked, NOT done yet): in **Volume** mode move the 0 baseline to the BOTTOM and draw
+  a half-wave going up (the mirrored bottom half is wasted) — same "baseline at bottom" idea as Notes.
+- Phase 2 (unchanged): wire placed notes into playback so any instrument pitches to them.
+
+## v0.29.0 — NOTES mode: a piano-roll where the waveform rides the grid AT ITS PITCH (Phase 1)
+The board now has a **Volume ↔ Notes** toggle (top bar, next to Pen/Grid/Fit). Same take, two ways
+to draw it:
+- **Volume** = exactly as before (waveform mirrored around centre, draw hits/loudness).
+- **Notes** = a **piano-roll**: a piano keyboard gutter on the left (C2…C6 with black/white key
+  lanes + C labels), horizontal note lanes, vertical tempo grid, and — the key idea — the take's
+  **waveform is drawn INSIDE the grid at its detected pitch height**, riding up/down and **coloured
+  by note**, so you *see the melody you hummed on the staff*. You then place **note points** on it
+  with the pen (click = a note snapped to the semitone lane + 16th-note grid, drag to move,
+  right-click to delete). Hovering shows the note name for the lane under the cursor.
+- **Works for ANY instrument, not just hums** (user's requirement): a note point is just (time,
+  pitch); Phase 2 will make the track's instrument (tom/clap/kick/synth/…) play at that pitch, so a
+  line of ascending points "toms up". Phase 1 is the **authoring/visual** surface only — NO audio
+  change yet, and nothing is automatic (extraction only draws the guide).
+
+Implementation (all in `separationboard.py`, engine reused from v0.28's `groove.pitch_ribbon`):
+- `CurveCanvas.mode` ("volume"|"notes"); `set_mode` + `_fit_note_range` (auto-fits the visible pitch
+  range to the take's detected notes, else C2..C6). Notes-mode geometry: `_note_y`/`_midi_at_y`
+  (pitch↔y), `_to_px_t`/`_t_at_x` (time↔x), `_snap_t` (16th-note snap), `_lane_h`, `_notes_hit`.
+  `_xspan` widens the left margin to `KB=46` for the keyboard in notes mode.
+- `_paint_notes` draws lanes + keyboard + tempo grid + the **pitch-positioned waveform** (per column:
+  pitch from the ribbon → y, amplitude → bar height, colour by pitch-class) + placed note dots +
+  playhead + hover label. `paintEvent` branches to it when `mode=="notes"`.
+- Interaction: `_notes_press`/`_notes_move`/`_notes_hover` + release; notes live in a per-track
+  `notes` list (`[{id,t,midi}]`), separate from `points`, so the two views don't collide. Rides
+  undo automatically (board `snapshot`/`restore` deep-copy all track keys).
+- Top bar: `_mode_btns` + `_set_mode`. Verified: a C4→E4→G4→E4 hum renders as red→green→blue→green
+  blocks climbing the grid (`scratchpad/notes.png`); clicks place notes at the right lane/time; full
+  `board_check` still green.
+- **Phase 2 (next):** wire the placed notes into playback so the track's instrument pitches to each
+  note (drum/sample = resample; synth = oscillator freq) → `Event.pitch`.
+
+## v0.28.0 — NOTE RIBBON on the waveform (see the pitches you hummed) · one-screen toolbar fix · My Sounds removed
+- **Note ribbon (the headline feature).** A thin colour strip drawn just under each take's name on
+  the Separation Board waveform, showing **what note is sounding at each moment** — hue = pitch-class
+  (C=red … around the wheel), a touch brighter per octave, and **blank over drums/ts** (no pitch).
+  It's a **VISUAL REFERENCE ONLY**: it never edits beats, never assigns a note, never makes a track.
+  The user builds every track by hand as before; the ribbon just lets them *see* the melody in the
+  take (e.g. "there's a C4 hum here") so they can draw a synth/hum track and set its note themselves.
+  **Hover** the ribbon → a small label shows the exact note (e.g. `C#4`) so they can read it before
+  setting a Low/High note by hand.
+  - Engine: `groove.pitch_ribbon(buf, sr)` runs **pYIN on the HPSS-harmonic layer** (so a kick/ts
+    over a hum doesn't fake a pitch — a mouth can only hum one pitch at a time, so monophonic tracking
+    on the harmonic layer is exactly right) → `(t_frac, midi, voiced)` arrays. `groove.note_name(midi)`
+    → `"C#4"`. Both DISPLAY-ONLY.
+  - Canvas (`separationboard.CurveCanvas`): `set_takes` computes the ribbon per take, **cached by
+    `id(buf)`** (`_ribbon_for`) so pYIN runs once per take, not on every resync. `_pitch_color(midi)`
+    (pitch-class→HSL hue), `_draw_ribbon` (thin strip, ~700 cols), `_pitch_at` (note at a fraction),
+    `_update_hover`/`leaveEvent` + a painted hover label. Drawn per take row, skipped while recording.
+  - Verified: a synthetic C4→E4→G4 hum + kicks → ribbon reads A4/C5 exactly on pure tones, colours
+    the three thirds red/green/blue, kicks stay blank (`scratchpad/ribbon.png`). All `board_check`
+    checks still green.
+  - NOTE (assistant can't hear/see live audio): the user should sanity-check the ribbon on a REAL
+    beatbox take (hum + percussion) — pYIN thresholds may need tuning on real mic input.
+  - Possible follow-ups (not built): a toggle to hide the ribbon; note letters inline (not just on
+    hover); ribbon position (currently top of each row) if they want it hugging the wave.
+
+### one-screen keeps the toolbar with the Studio · My Sounds gone from the pickers (was v0.27.1)
+- **One-screen layout fix.** In one-screen mode the Studio toolbar was stranded at the WINDOW top
+  with the board wedged between it and the grid (only `grid_host` was in the splitter; the toolbar
+  lived above it in `root`). Now the toolbar + grid are one **`_studio_pane`** widget that IS the
+  splitter's studio pane, so the board docks ABOVE the whole pane — the toolbar stays glued to the
+  Studio grid, exactly like the separate window does in two-screen mode. Verified: board = top pane,
+  `_studio_pane` (toolbar+grid) = bottom pane; toolbar stays parented to the studio pane across
+  dock/float.
+- **My Sounds removed from the instrument selectors.** `_collapse_items` (board picker) no longer
+  appends the `sample` entries; `SettingsPanel.set_my_sounds` deleted and its call dropped from
+  `mainwindow` (picker is now drums + a single Synth + Original). Old projects with `sample` lanes
+  still load/render. Verified: no `sample` kind reaches either picker.
+- **TODO (deferred, user-approved):** delete the **legacy web app** at the repo root (`Beatbox to
+  MIDI.dc.html`, `support.js`, `sw.js`, `server.py`, `vendor/`, `manifest.webmanifest`, PWA icons,
+  `make-cert.sh`, root `PROGRESS.md`, etc.) — the app is native-only now; the HTML is dead weight.
 
 ## v0.27.0 — save-ALL (separator too) · 1/2-screen layout · "?" help · removed Save/Grooves/My Sounds + AI
 Four things:

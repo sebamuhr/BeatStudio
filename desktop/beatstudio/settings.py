@@ -74,7 +74,7 @@ class SettingsPanel(QFrame):
         left = QVBoxLayout(); left.setSpacing(6)
         left.addWidget(self._label("Instrument"))
         pick = QHBoxLayout()
-        self.items = list(ITEMS)          # extended with My Sounds at runtime
+        self.items = list(ITEMS)          # drums + a single Synth (My Sounds removed)
         self.combo = QComboBox()
         self.combo.setFont(theme.sans(12))
         self.combo.setMinimumHeight(32)
@@ -131,17 +131,6 @@ class SettingsPanel(QFrame):
     def _label(self, t):
         l = QLabel(t); l.setStyleSheet("color:#8a8a99;font-size:11px;border:none;")
         return l
-
-    def set_my_sounds(self, sounds):
-        """Append the user's gallery sounds to the instrument picker."""
-        self.items = list(ITEMS) + [("sample", "mys:" + s.id, "My — " + s.name) for s in sounds]
-        self.combo.blockSignals(True)
-        self.combo.clear()
-        for _, _, lbl in self.items:
-            self.combo.addItem(lbl)
-        self.combo.blockSignals(False)
-        if self.lane:
-            self._select_instrument(self.lane)
 
     def _select_instrument(self, lane):
         idx = next((i for i, (k, s, _) in enumerate(self.items) if k == lane.kind and s == lane.sound), 0)

@@ -84,7 +84,6 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central); root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
 
         self.toolbar = Toolbar(self.project)
-        root.addWidget(self.toolbar)
 
         grid_host = QWidget()
         g = QGridLayout(grid_host); g.setContentsMargins(16, 8, 16, 16); g.setSpacing(0)
@@ -99,11 +98,19 @@ class MainWindow(QMainWindow):
         # panel frame around the grid
         grid_host.setStyleSheet("")
         self._grid_host = grid_host
+        # The Studio pane = its toolbar + grid kept TOGETHER, so in one-screen mode the toolbar
+        # stays attached to the Studio (the board docks ABOVE this whole pane, exactly like the
+        # separate window does in two-screen mode) instead of being stranded at the window top.
+        studio = QWidget()
+        sv = QVBoxLayout(studio); sv.setContentsMargins(0, 0, 0, 0); sv.setSpacing(0)
+        sv.addWidget(self.toolbar)
+        sv.addWidget(grid_host, 1)
+        self._studio_pane = studio
         # A vertical splitter is the home for the studio; in one-screen mode the Separation Board
         # docks ABOVE it (each pane resizable + scrolls on its own, like two windows).
         self._split = QSplitter(Qt.Vertical); self._split.setChildrenCollapsible(False)
         self._split.setHandleWidth(6)
-        self._split.addWidget(grid_host)
+        self._split.addWidget(studio)
         root.addWidget(self._split, 1)
         self._one_screen = False
 
@@ -184,7 +191,6 @@ class MainWindow(QMainWindow):
         self._sync_commit = QTimer(self); self._sync_commit.setSingleShot(True)
         self._sync_commit.setInterval(400); self._sync_commit.timeout.connect(self._commit)
         self._samples = self.library.samples_dict()
-        self.settings.set_my_sounds(self.library.sounds)
         self._timer = QTimer(self); self._timer.setInterval(16)
         self._timer.timeout.connect(self._tick)
         self._metro_timer = QTimer(self); self._metro_timer.timeout.connect(self._metro_click)
@@ -496,6 +502,7 @@ class MainWindow(QMainWindow):
                                 preview_original_cb=self._preview_original,
                                 preview_both_cb=self._preview_both,
                                 preview_sound_cb=self._preview_synth_sound,
+                                preview_note_cb=self._preview_note,
                                 stop_cb=self._stop_preview)
         board.create_requested.connect(self._resync_all_board)   # legacy "resync everything"
         board.record_requested.connect(self._toggle_master_record)
@@ -856,6 +863,19 @@ class MainWindow(QMainWindow):
         v = _voice_for(lane, e, self._spb, 0, self._samples)
         if v is not None:
             self.engine.one_shot(v)
+
+    def _preview_note(self, kind: str, sound: str, params, midi: int):
+        """Audition an instrument at a specific pitch (piano key in the NOTES gutter). Synth plays
+        that frequency; a drum/sample is RESAMPLED to that note (so a tom really toms up/down)."""
+        if kind == "synth":
+            v = synth.voice(sound or "sine", synth.midi_to_hz(midi), 0.5, 0.9, params or {})
+        elif kind == "sample":
+            samp = (self._samples or {}).get(sound)
+            v = synth.sample_voice(samp["buf"], samp.get("base", 60), midi, 0.5, 0.9) if samp else None
+        else:                                              # drum (+ 'original' fallback): pitch by resampling (C4 = natural)
+            v = synth.sample_voice(synth.drum(sound or "kick", 0.9), 60, midi, 0.0, 0.9, loop=False)
+        if v is not None and len(v):
+            self.engine.stop_one_shot(); self.engine.one_shot(v)
 
     def _preview_synth_sound(self, preset: str, params: dict):
         """Play a single synth voice with its knobs applied (Base / Morph ▶ on the board)."""

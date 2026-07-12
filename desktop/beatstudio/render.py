@@ -11,6 +11,7 @@ from .synth import SR
 # When a sample-lane has no loaded sample yet, fall back to a distinct percussion
 # voice per track so the groove is audible.
 _FALLBACK = ["kick", "snare", "hat", "clap", "tomM", "rim", "cowbell", "shaker", "congaH", "openhat"]
+_DRUM_REF = 60   # a drum note at this MIDI plays NATURAL; above/below resamples it up/down (tom up/down)
 
 
 def _voice_for(lane, e, spb, li, samples):
@@ -20,6 +21,8 @@ def _voice_for(lane, e, spb, li, samples):
         dur = (e.length or 0) * spb
         # a long drawn region → a buzz-ROLL (the "tsssss"); a short one → a single hit
         x = synth.drum_roll(lane.sound, e.vel, dur) if dur > 0.14 else synth.drum(lane.sound, e.vel)
+        if e.pitch is not None and int(e.pitch) + tune != _DRUM_REF:   # NOTES pitch → resample (tom up/down)
+            x = synth.sample_voice(x, _DRUM_REF, int(e.pitch) + tune, 0.0, 1.0, loop=False)
     elif kind == "synth":
         freq = synth.midi_to_hz((e.pitch if e.pitch is not None else 60) + tune)
         dur = max(0.15, (e.length or 0) * spb) if e.length else 0.3

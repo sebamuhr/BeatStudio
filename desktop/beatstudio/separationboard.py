@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QElapsedTimer, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 
-from . import theme
+from . import theme, groove
 from .synth import SR, WAVES, SYNTH_KNOBS, default_params, FX_KNOBS, default_fx
 from .model import Lane, Event, uid
 from .analysis import onset_start
@@ -32,12 +32,11 @@ from .settings import ITEMS as INSTRUMENT_ITEMS
 
 def _collapse_items(raw):
     """The board's instrument picker shows each DRUM, a single 'Synth' (its two waveforms are
-    chosen in the row), then My Sounds — NOT one entry per synth waveform."""
+    chosen in the row) and 'Original' — NOT one entry per synth waveform."""
     raw = list(raw)
     drums = [it for it in raw if it[0] == "drum"]
-    samples = [it for it in raw if it[0] == "sample"]
     # "Original" = play your OWN recorded sound for this track's hits, through an FX rack.
-    return drums + [("synth", WAVES[0], "Synth"), ("original", "", "Original")] + samples
+    return drums + [("synth", WAVES[0], "Synth"), ("original", "", "Original")]
 
 DOT_R = 5.5
 HIT_R = 12.0
@@ -45,7 +44,12 @@ SILENCE = 0.03           # at/under this the line is silent; anything above make
 MIN_SPAN = 0.01          # deepest zoom = 1% of the take across the screen
 MM_H = 46                # navigator height
 LM = 30                  # left margin (room for the 0–10 volume scale)
+KB = 46                  # left margin in NOTES mode (room for the piano keyboard gutter)
 RM = 12                  # right margin
+_BLACK_KEYS = {1, 3, 6, 8, 10}   # pitch-classes that are black keys on the piano
+DEF_MIDI = 60                    # default pitch (C4 = natural) for a point until you set it in NOTES
+PIANO_MIN, PIANO_MAX = 21, 108   # full piano (A0..C8) — scroll the NOTES view anywhere in here
+NOTE_SPAN = 30                   # semitones visible at once in NOTES mode (scroll for the rest)
 # each take (main + overdubs) gets its own row + waveform colour
 TAKE_HEX = ["#ff6b6b", "#c0a8ff", "#5cd6c0", "#ffd24d", "#ff8c5c", "#6ecbff"]
 
@@ -62,6 +66,7 @@ class CurveCanvas(QWidget):
     point_selected = Signal(str)  # an anchor was picked → highlight the matching Studio beat
     grid_scaled = Signal(float)   # Grid tool dragged → a new bpm (uniform tempo stretch)
     fit_applied = Signal(float, float, float)   # Fit tool: (a_frac, b0_frac, new_b_frac) → resample
+    key_pressed = Signal(int)     # a piano key in the notes gutter was clicked → audition this MIDI note
 
     def __init__(self, buf, sr, bpm, tracks, parent=None):
         super().__init__(parent)
@@ -82,6 +87,11 @@ class CurveCanvas(QWidget):
         self._drag = None
         self._pan_mm = False
         self._emit_clock = QElapsedTimer(); self._emit_clock.start()
+        self._pitch_cache = {}     # id(buf) -> (len, (tfrac, midi, voiced)); pYIN runs once per take
+        self._hover = None         # (x, y, note-name) for the ribbon's hover label, or None
+        self.mode = "volume"       # "volume" (hits/loudness, as always) | "notes" (piano-roll)
+        self.note_lo, self.note_hi = 36, 84   # visible pitch range in notes mode (C2..C6)
+        self._note_drag = None     # (track_idx, note_idx) while dragging a note in the piano-roll
         self.takes = []
         self.set_takes([{"id": "T0", "buf": buf, "color": take_color(0), "name": "Main"}])
         self.setMinimumHeight(340)
@@ -98,9 +108,29 @@ class CurveCanvas(QWidget):
             self.takes.append({"id": tk["id"], "buf": b, "color": tk.get("color", take_color(len(self.takes))),
                                "name": tk.get("name", f"Take {len(self.takes)+1}"),
                                "gpeak": float(np.abs(b).max()) + 1e-9,
+                               "pitch": self._ribbon_for(b),
                                "peaks": self._peaks_over(b, 0.0, 1.0, 1400)})
         self.buf = self.takes[0]["buf"]      # the MAIN take drives tempo/duration
         self.update()
+
+    def _ribbon_for(self, buf):
+        """(tfrac, midi, voiced) pitch ribbon for a take buffer, computed once per buffer. set_takes
+        is called a lot during sync with the SAME buffers, so cache by identity to avoid re-running
+        pYIN on every resync."""
+        key = id(buf); entry = self._pitch_cache.get(key)
+        if entry is None or entry[0] != len(buf):
+            entry = (len(buf), groove.pitch_ribbon(buf, self.sr))
+            self._pitch_cache[key] = entry
+        return entry[1]
+
+    @staticmethod
+    def _pitch_color(midi):
+        """Pitch-class → hue around the colour wheel (C=red…); octave nudges the lightness so higher
+        notes read a touch brighter. Distinct per note, works in the dark theme."""
+        m = float(midi); pc = int(round(m)) % 12
+        octv = int(round(m)) // 12 - 1                 # ~ musical octave (MIDI 60 = C4)
+        light = 0.40 + 0.05 * max(-2, min(3, octv - 4))
+        return QColor.fromHslF(pc / 12.0, 0.80, max(0.30, min(0.72, light)))
 
     def set_buf(self, buf):                  # back-compat: replace just the main take
         self.set_takes([{"id": "T0", "buf": buf, "color": take_color(0), "name": "Main"}])
@@ -129,11 +159,13 @@ class CurveCanvas(QWidget):
         return 0
 
     def _band(self, i):
-        """Vertical layout for take-row i → (top, height, centre-y, half-height)."""
+        """Vertical layout for take-row i → (top, height, baseline-y, usable-height). The baseline
+        (v=0) sits near the BOTTOM of the row and v=1 is the top, so the waveform is a HALF-wave
+        going up (the mirrored bottom half was wasted). `_to_px`/`_from_px` map through these."""
         y0 = 6.0; y1 = self.height() - MM_H - 18
         n = max(1, len(self.takes)); bh = (y1 - y0) / n
         top = y0 + i * bh
-        return top, bh, top + bh * 0.56, bh * 0.40
+        return top, bh, top + bh - 8, bh - 26
 
     def set_active(self, i):
         self.active = i; self.active_changed.emit(i); self.update()
@@ -154,7 +186,7 @@ class CurveCanvas(QWidget):
 
     # --- geometry ---
     def _xspan(self):
-        return LM, self.width() - RM
+        return (KB if self.mode == "notes" else LM), self.width() - RM
 
     def _span(self):
         return max(1e-6, self.view1 - self.view0)
@@ -172,12 +204,106 @@ class CurveCanvas(QWidget):
     def _apx(self, pt, i=0):                   # anchor pixel (in take-row i)
         return self._to_px(pt["t"], pt["v"], i)
 
+    def _pitch_at(self, pr, tf):
+        """Note (midi) at take-fraction tf from a ribbon triple, or None where unpitched."""
+        if not pr or len(pr[0]) < 2:
+            return None
+        tfr, midi_arr, voiced = pr
+        j = min(len(tfr) - 1, max(0, int(np.searchsorted(tfr, tf))))
+        return float(midi_arr[j]) if (voiced[j] and np.isfinite(midi_arr[j])) else None
+
+    def _draw_ribbon(self, p, pr, x0, x1, ry, rh):
+        if not pr or len(pr[0]) < 2:
+            return
+        ncols = int(min(700, max(2, (x1 - x0) / 2)))
+        cw = (x1 - x0) / ncols + 1.0
+        for k in range(ncols):
+            tf = self.view0 + (k / (ncols - 1)) * self._span()
+            m = self._pitch_at(pr, tf)
+            if m is not None:
+                x = x0 + (k / (ncols - 1)) * (x1 - x0)
+                p.fillRect(QRectF(x, ry, cw, rh), self._pitch_color(m))
+
+    # --- notes-mode (piano-roll) geometry ---
+    def set_mode(self, name):
+        """Switch the canvas between 'volume' (hits/loudness) and 'notes' (piano-roll)."""
+        self.mode = "notes" if name == "notes" else "volume"
+        if self.mode == "notes":
+            self._fit_note_range()
+        self.update()
+
+    def _fit_note_range(self):
+        """Centre the (scrollable) NOTE_SPAN-semitone window on the active take's detected notes, so
+        the singing lands in the middle of the grid. Falls back to C3..-ish when there's no pitch."""
+        centre = 63                                       # ~D#4 default centre
+        pr = self.takes[self._active_band()].get("pitch") if self.takes else None
+        if pr and len(pr[0]) > 1:
+            good = pr[1][pr[2] & np.isfinite(pr[1])]
+            if len(good):
+                centre = int(round((float(good.min()) + float(good.max())) / 2))
+        lo = max(PIANO_MIN, min(PIANO_MAX - NOTE_SPAN, centre - NOTE_SPAN // 2))
+        self.note_lo, self.note_hi = lo, lo + NOTE_SPAN
+
+    def _scroll_notes(self, ds):
+        """Shift the visible piano window by ds semitones (mouse-wheel in NOTES mode), clamped."""
+        span = self.note_hi - self.note_lo
+        lo = max(PIANO_MIN, min(PIANO_MAX - span, self.note_lo + int(ds)))
+        if lo != self.note_lo:
+            self.note_lo, self.note_hi = lo, lo + span; self.update()
+
+    def _notes_plot(self):
+        return 6.0, self.height() - MM_H - 18
+
+    def _note_y(self, m):
+        y0, y1 = self._notes_plot()
+        frac = (m - self.note_lo) / max(1, (self.note_hi - self.note_lo))
+        return y1 - frac * (y1 - y0)
+
+    def _midi_at_y(self, y):
+        y0, y1 = self._notes_plot()
+        frac = (y1 - y) / max(1.0, (y1 - y0))
+        return self.note_lo + frac * (self.note_hi - self.note_lo)
+
+    def _to_px_t(self, t):
+        x0, x1 = self._xspan()
+        return x0 + (t - self.view0) / self._span() * (x1 - x0)
+
+    def _t_at_x(self, x):
+        x0, x1 = self._xspan()
+        return max(0.0, min(1.0, self.view0 + (x - x0) / max(1.0, (x1 - x0)) * self._span()))
+
+    def _snap_t(self, t):
+        """Snap a take-fraction to the nearest 16th-note on the tempo grid."""
+        dur = len(self.buf) / self.sr
+        if dur <= 0:
+            return t
+        sub = (60.0 / self.bpm) / 4.0
+        return min(1.0, max(0.0, (round((t * dur) / sub) * sub) / dur))
+
+    def _lane_h(self):
+        y0, y1 = self._notes_plot()
+        return (y1 - y0) / max(1, (self.note_hi - self.note_lo))
+
+    def _notes_hit(self, pos):
+        """A point of the active track near the cursor (by time+pitch) → index, else None."""
+        if not (0 <= self.active < len(self.tracks)):
+            return None
+        pts = self.tracks[self.active].get("points") or []
+        for i, pt in enumerate(pts):
+            dx = self._to_px_t(pt["t"]) - pos.x(); dy = self._note_y(pt.get("midi", DEF_MIDI)) - pos.y()
+            if dx * dx + dy * dy <= (HIT_R * 0.9) ** 2:
+                return i
+        return None
+
 
     # --- painting ---
     def paintEvent(self, _):
         p = QPainter(self); p.setRenderHint(QPainter.Antialiasing, True)
         x0, x1 = self._xspan()
         p.fillRect(self.rect(), QColor("#0c0c14"))
+        if self.mode == "notes":
+            self._paint_notes(p, x0, x1)
+            self._paint_navigator(p); p.end(); return
         dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
         y_top = self._band(0)[0]; y_bot = self._band(len(self.takes) - 1)[0] + self._band(len(self.takes) - 1)[1]
         active_band = self._active_band()
@@ -203,7 +329,7 @@ class CurveCanvas(QWidget):
                     pk = float(env.max()) + 1e-9
                     for k in range(len(env)):
                         x = x0 + (k / (len(env) - 1)) * (x1 - x0) * 0.75; a = float(env[k]) / pk * half
-                        p.drawLine(QPointF(x, cy - a), QPointF(x, cy + a))
+                        p.drawLine(QPointF(x, cy), QPointF(x, cy - a))
             else:
                 ncols = int(min(1400, max(2, x1 - x0)))
                 a0, b0 = int(self.view0 * len(tk["buf"])), int(self.view1 * len(tk["buf"]))
@@ -214,7 +340,7 @@ class CurveCanvas(QWidget):
                     p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 130), 1))
                     for k in range(ncols):
                         x = x0 + (k / (ncols - 1)) * (x1 - x0); a = float(vpeaks[k]) * half
-                        p.drawLine(QPointF(x, cy - a), QPointF(x, cy + a))
+                        p.drawLine(QPointF(x, cy), QPointF(x, cy - a))
             p.setFont(theme.sans(9, 600)); p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 210), 1))
             p.drawText(QRectF(x0 + 6, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
 
@@ -305,7 +431,132 @@ class CurveCanvas(QWidget):
             p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(13))
             p.drawText(self.rect(), Qt.AlignCenter, "Add a track → then draw its sound with your mouse")
 
+        # hover label: the note under the cursor on the ribbon (read it to set a synth/hum note by hand)
+        if self._hover is not None:
+            hx, hy, txt = self._hover
+            p.setFont(theme.sans(11, 700))
+            tw = p.fontMetrics().horizontalAdvance(txt) + 14
+            bx = min(max(hx + 12, x0), self.width() - tw); by = max(2.0, hy - 26)
+            p.setBrush(QBrush(QColor(18, 18, 28, 235))); p.setPen(QPen(QColor(255, 255, 255, 40), 1))
+            p.drawRoundedRect(QRectF(bx, by, tw, 20), 5, 5)
+            p.setPen(QPen(QColor("#ffffff"), 1)); p.drawText(QRectF(bx, by, tw, 20), Qt.AlignCenter, txt)
+
         self._paint_navigator(p); p.end()
+
+    def _paint_notes(self, p, x0, x1):
+        """Piano-roll: keyboard gutter + note lanes + the take's waveform drawn AT ITS PITCH HEIGHT
+        (riding up/down the grid, coloured by note), and the hand-placed note points on top."""
+        y0, y1 = self._notes_plot(); lh = self._lane_h()
+        dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
+        ab = self._active_band()
+        # note lanes: black-key shading (background)
+        for m in range(self.note_lo, self.note_hi + 1):
+            if (m % 12) in _BLACK_KEYS:
+                p.fillRect(QRectF(x0, self._note_y(m) - lh / 2, x1 - x0, lh), QColor(0, 0, 0, 60))
+        # the take's pitch drawn as a FILLED silhouette: each column filled from the BOTTOM up to the
+        # note (so the TOP EDGE traces your singing and you can read the whole flow, not just spots).
+        pr = self.takes[ab].get("pitch") if self.takes else None
+        buf = self.takes[ab]["buf"] if self.takes else self.buf
+        gpk = self.takes[ab]["gpeak"] if self.takes else (float(np.abs(buf).max()) + 1e-9)
+        if pr and len(pr[0]) > 1 and len(buf) > 1:
+            nc = int(min(1100, max(2, x1 - x0))); N = len(buf)
+            cw = (x1 - x0) / nc + 1.0
+            mid = np.full(nc, np.nan, np.float32); amp = np.zeros(nc, np.float32)
+            for kk in range(nc):
+                tf0 = self.view0 + (kk / nc) * self._span(); tf1 = self.view0 + ((kk + 1) / nc) * self._span()
+                mm = self._pitch_at(pr, (tf0 + tf1) / 2)
+                if mm is not None:
+                    mid[kk] = mm
+                a = int(tf0 * N); b = max(a + 1, int(tf1 * N)); amp[kk] = float(np.abs(buf[a:b]).max()) / gpk
+            # AMPLITUDE decides WHERE to draw (a continuous run of sound = one vocalisation), PITCH
+            # decides the height — interpolated across pYIN dropouts (the p/m consonants) so one breath
+            # ("paaaaaummm") is ONE continuous fill; a real silence between notes still breaks it.
+            w = max(1, nc // 120)
+            sm = np.convolve(amp, np.ones(2 * w + 1, np.float32) / (2 * w + 1), mode="same") if nc >= 5 else amp
+            sound = sm > 0.04
+            fillmid = np.full(nc, np.nan, np.float32)
+            kk = 0
+            while kk < nc:
+                if not sound[kk]:
+                    kk += 1; continue
+                j = kk
+                while j < nc and sound[j]:
+                    j += 1
+                seg = np.arange(kk, j); gd = seg[np.isfinite(mid[seg])]
+                if len(gd) >= 1:
+                    fillmid[seg] = np.interp(seg, gd, mid[gd]).astype(np.float32)   # hold/ramp pitch across the run
+                kk = j
+            for kk in range(nc):
+                if not np.isfinite(fillmid[kk]):
+                    continue
+                x = self._to_px_t(self.view0 + (kk / nc) * self._span()); yc = self._note_y(float(fillmid[kk]))
+                col = self._pitch_color(float(fillmid[kk])); col.setAlpha(int(90 + 130 * min(1.0, amp[kk] * 2.0)))
+                p.fillRect(QRectF(x, yc, cw, y1 - yc), col)        # fill down to the baseline
+                edge = self._pitch_color(float(fillmid[kk]))       # bright top edge = the note
+                p.setPen(QPen(edge, 1.6)); p.drawLine(QPointF(x, yc), QPointF(x + cw, yc))
+        # horizontal lane separators + vertical tempo grid ON TOP of the fill (kept readable)
+        for m in range(self.note_lo, self.note_hi + 1):
+            top = self._note_y(m) - lh / 2
+            p.setPen(QPen(QColor(255, 255, 255, 16), 1)); p.drawLine(int(x0), int(top), int(x1), int(top))
+        if dur:
+            sub = beat_len / 4.0; k = int(self.view0 * dur / sub)
+            while True:
+                tf = (k * sub) / dur
+                if tf > self.view1:
+                    break
+                if tf >= self.view0:
+                    x = self._to_px_t(tf)
+                    a = 55 if (k % 16 == 0) else (30 if (k % 4 == 0) else 12)
+                    p.setPen(QPen(QColor(255, 255, 255, a), 1)); p.drawLine(int(x), int(y0), int(x), int(y1))
+                k += 1
+        # placed note points (active track bright, others faint) — a short bar on the lane + a dot
+        for ti, tr in enumerate(self.tracks):
+            if not tr.get("visible", True):
+                continue
+            active = (ti == self.active)
+            for nt in (tr.get("points") or []):
+                mm = nt.get("midi", DEF_MIDI)
+                x = self._to_px_t(nt["t"]); yc = self._note_y(mm)
+                if not (x0 - 8 <= x <= x1 + 8):
+                    continue
+                col = self._pitch_color(mm)
+                bar = col if active else QColor(col.red(), col.green(), col.blue(), 110)
+                p.setPen(Qt.NoPen); p.setBrush(QBrush(bar))
+                p.drawRoundedRect(QRectF(x - 9, yc - lh * 0.34, 18, lh * 0.68), 3, 3)   # note block on its lane
+                p.setBrush(QBrush(QColor("#ffffff") if active else QColor(255, 255, 255, 150)))
+                p.setPen(QPen(QColor("#0c0c14"), 1.4) if active else Qt.NoPen)
+                p.drawEllipse(QPointF(x, yc), DOT_R, DOT_R)
+        # keyboard gutter (drawn last, left of the plot)
+        for m in range(self.note_lo, self.note_hi + 1):
+            yc = self._note_y(m); top = yc - lh / 2
+            if (m % 12) in _BLACK_KEYS:
+                p.fillRect(QRectF(0, top + lh * 0.15, KB * 0.55, lh * 0.7), QColor("#15151c"))
+            else:
+                p.fillRect(QRectF(0, top, KB, lh), QColor("#e6e6ec"))
+                p.setPen(QPen(QColor("#aeaeb8"), 1)); p.drawLine(0, int(top), int(KB), int(top))
+                if m % 12 == 0:
+                    p.setPen(QPen(QColor("#30303a"), 1)); p.setFont(theme.sans(8, 700))
+                    p.drawText(QRectF(3, yc - 6, KB - 6, 12), Qt.AlignLeft | Qt.AlignVCenter, groove.note_name(m))
+        # playhead
+        if self.playhead is not None and self.view0 <= self.playhead <= self.view1:
+            x = self._to_px_t(self.playhead)
+            p.setPen(QPen(theme.REC, 2)); p.drawLine(QPointF(x, y0), QPointF(x, y1))
+        # hint / hover
+        if not self.tracks:
+            p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(12))
+            p.drawText(QRectF(x0, y0, x1 - x0, 24), Qt.AlignHCenter | Qt.AlignTop,
+                       "Add a track → then click the coloured wave to place notes")
+        elif not (self.tracks[max(0, self.active)].get("points")):
+            p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(12))
+            p.drawText(QRectF(x0, y0, x1 - x0, 24), Qt.AlignHCenter | Qt.AlignTop,
+                       "Trace the coloured wave — click to place notes")
+        if self._hover is not None:
+            hx, hy, txt = self._hover
+            p.setFont(theme.sans(11, 700)); tw = p.fontMetrics().horizontalAdvance(txt) + 14
+            bx = min(max(hx + 12, x0), self.width() - tw); by = max(2.0, hy - 26)
+            p.setBrush(QBrush(QColor(18, 18, 28, 235))); p.setPen(QPen(QColor(255, 255, 255, 40), 1))
+            p.drawRoundedRect(QRectF(bx, by, tw, 20), 5, 5)
+            p.setPen(QPen(QColor("#ffffff"), 1)); p.drawText(QRectF(bx, by, tw, 20), Qt.AlignCenter, txt)
 
     def _mm_rect(self):
         w, h = self.width(), self.height(); pad = 12; mw = min(300, w * 0.34)
@@ -335,9 +586,12 @@ class CurveCanvas(QWidget):
         d = ev.angleDelta().y() or ev.pixelDelta().y()      # touchpads use pixelDelta
         if d == 0:
             return
+        if self.mode == "notes" and not (ev.modifiers() & Qt.ControlModifier):
+            self._scroll_notes(2 if d > 0 else -2)          # NOTES: plain scroll = up/down the piano
+            return
         x0, x1 = self._xspan()
         fx = min(1.0, max(0.0, (ev.position().x() - x0) / max(1.0, (x1 - x0))))
-        self.zoom_at(0.82 if d > 0 else 1 / 0.82, fx)       # plain scroll zooms (works on touchpad)
+        self.zoom_at(0.82 if d > 0 else 1 / 0.82, fx)       # plain scroll zooms (Ctrl+scroll in notes)
 
     def _clamp_view(self):
         span = min(1.0, self.view1 - self.view0)
@@ -437,6 +691,8 @@ class CurveCanvas(QWidget):
             if ev.button() == Qt.LeftButton:
                 self._pan_mm = True; r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update()
             return
+        if self.mode == "notes":
+            self._notes_press(ev, pos); return
         if self.tool == "grid":
             if ev.button() == Qt.LeftButton:
                 self._grid_press(pos)
@@ -466,12 +722,100 @@ class CurveCanvas(QWidget):
         i = 0
         while i < len(pts) and pts[i]["t"] < t:
             i += 1
-        pts.insert(i, {"id": uid("p"), "t": t, "v": v, "hx": 0.0, "hy": 0.0})
+        pts.insert(i, {"id": uid("p"), "t": t, "v": v, "midi": DEF_MIDI, "hx": 0.0, "hy": 0.0})
         self._drag = ("handle_out", self.active, i)    # pen tool: drag now pulls out a curve handle
         self._select_point(pts[i]["id"]); self.update()
 
+    def _update_hover(self, pos):
+        """Note under the cursor → self._hover, for the ribbon label. Only repaints on a change."""
+        note = None
+        if self._drag is None and not self._pan_mm:
+            x0, x1 = self._xspan()
+            if x0 <= pos.x() <= x1:
+                i = next((k for k in range(len(self.takes))
+                          if self._band(k)[0] <= pos.y() <= self._band(k)[0] + self._band(k)[1]), 0)
+                if i < len(self.takes):
+                    tf = self.view0 + (pos.x() - x0) / max(1.0, (x1 - x0)) * self._span()
+                    m = self._pitch_at(self.takes[i].get("pitch"), tf)
+                    if m is not None:
+                        note = (pos.x(), pos.y(), groove.note_name(m))
+        prev = self._hover
+        self._hover = note
+        if (note is None) != (prev is None) or (note and prev and note[2] != prev[2]):
+            self.update()
+        elif note is not None:
+            self._hover = note; self.update()      # label follows the cursor
+
+    def leaveEvent(self, _):
+        if self._hover is not None:
+            self._hover = None; self.update()
+
+    # --- notes-mode (piano-roll) interaction ---
+    def _notes_press(self, ev, pos):
+        if not self.tracks:
+            return
+        if not (0 <= self.active < len(self.tracks)):
+            self.set_active(0)                             # no track picked yet → draw on the first
+        x0, _ = self._xspan()
+        if pos.x() < x0:                                   # clicked a piano KEY → audition the note
+            if ev.button() == Qt.LeftButton:
+                m = int(round(self._midi_at_y(pos.y())))
+                if self.note_lo <= m <= self.note_hi:
+                    self.key_pressed.emit(m)
+            return
+        pts = self.tracks[self.active].setdefault("points", [])
+        hit = self._notes_hit(pos)
+        if ev.button() == Qt.RightButton:                  # right-click a point → delete (both tabs)
+            if hit is not None:
+                pts.pop(hit); self.update(); self.edited.emit(self.active)
+            return
+        if ev.button() != Qt.LeftButton:
+            return
+        if hit is not None:                                # grab an existing point to re-pitch it
+            self._note_drag = (self.active, hit)
+            self._select_point(pts[hit].get("id")); self.update(); return
+        # new point: it's a shared beat — carries a pitch (set here) AND a volume (edit in the Volume tab)
+        m = max(self.note_lo, min(self.note_hi, int(round(self._midi_at_y(pos.y())))))
+        t = self._snap_t(self._t_at_x(pos.x()))
+        i = 0
+        while i < len(pts) and pts[i]["t"] < t:
+            i += 1
+        # from_notes → its TIME is owned by the Notes tab; in the Volume tab it's locked (volume only)
+        pts.insert(i, {"id": uid("p"), "t": t, "v": 0.8, "midi": m, "hx": 0.0, "hy": 0.0, "from_notes": True})
+        self._note_drag = (self.active, i); self._select_point(pts[i]["id"])
+        self.update(); self.edited.emit(self.active)
+
+    def _notes_move(self, ev, pos):
+        if self._pan_mm:
+            r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update(); return
+        self._notes_hover(pos)
+        if self._note_drag is None:
+            return
+        ti, ni = self._note_drag; pts = self.tracks[ti].get("points") or []
+        if ni >= len(pts):
+            self._note_drag = None; return
+        nt = pts[ni]
+        nt["t"] = self._snap_t(self._t_at_x(pos.x()))
+        nt["midi"] = max(self.note_lo, min(self.note_hi, int(round(self._midi_at_y(pos.y())))))
+        self.update()
+        if self._emit_clock.elapsed() > 80:
+            self._emit_clock.restart(); self.edited.emit(ti)
+
+    def _notes_hover(self, pos):
+        """Show the note name for the lane under the cursor (the note you'd place)."""
+        x0, x1 = self._xspan(); note = None
+        if self._note_drag is None and not self._pan_mm and x0 <= pos.x() <= x1:
+            m = int(round(self._midi_at_y(pos.y())))
+            if self.note_lo <= m <= self.note_hi:
+                note = (pos.x(), pos.y(), groove.note_name(m))
+        self._hover = note
+        self.update()
+
     def mouseMoveEvent(self, ev):
         pos = ev.position()
+        if self.mode == "notes":
+            self._notes_move(ev, pos); return
+        self._update_hover(pos)
         if self._pan_mm:
             r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update(); return
         if self.tool == "grid":
@@ -486,10 +830,12 @@ class CurveCanvas(QWidget):
         mode, ti, pi = self._drag; pts = self.tracks[ti]["points"]; pt = pts[pi]
         t, v = self._from_px(pos.x(), pos.y(), self._track_band(self.tracks[ti]))
         if mode == "anchor":
-            lo = pts[pi - 1]["t"] + 1e-4 if pi > 0 else 0.0
-            hi = pts[pi + 1]["t"] - 1e-4 if pi < len(pts) - 1 else 1.0
-            pt["t"] = min(max(t, lo), hi); pt["v"] = v
-            pt.pop("beat", None)                       # moving on the board un-locks the grid beat
+            pt["v"] = v
+            if not pt.get("from_notes"):               # notes-created points: TIME is locked here (volume only)
+                lo = pts[pi - 1]["t"] + 1e-4 if pi > 0 else 0.0
+                hi = pts[pi + 1]["t"] - 1e-4 if pi < len(pts) - 1 else 1.0
+                pt["t"] = min(max(t, lo), hi)
+                pt.pop("beat", None)                   # moving on the board un-locks the grid beat
         else:                                          # symmetric handle (out / in)
             hx, hy = t - pt["t"], v - pt["v"]
             if mode == "handle_in":
@@ -500,6 +846,13 @@ class CurveCanvas(QWidget):
             self._emit_clock.restart(); self.edited.emit(ti)
 
     def mouseReleaseEvent(self, _):
+        if self.mode == "notes":
+            if self._note_drag is not None:
+                ti = self._note_drag[0]; self._note_drag = None
+                pts = self.tracks[ti].get("points") or []; pts.sort(key=lambda q: q["t"])
+                self.edited.emit(ti)
+            self._pan_mm = False
+            return
         if self.tool == "grid":
             if self._grid_grab:
                 self._grid_grab = None
@@ -780,7 +1133,8 @@ class SeparationBoard(QWidget):
     playhead_moved = Signal(float)       # preview playhead (take-fraction 0..1, -1 = cleared)
 
     def __init__(self, buf, sr, bpm, instrument_items=None, preview_cb=None, preview_pattern_cb=None,
-                 preview_original_cb=None, preview_both_cb=None, preview_sound_cb=None, stop_cb=None):
+                 preview_original_cb=None, preview_both_cb=None, preview_sound_cb=None, stop_cb=None,
+                 preview_note_cb=None):
         # A plain top-level QWidget (NOT a QDialog) so the window manager treats it as a normal,
         # fully independent window it will maximise / full-screen / move to a 2nd monitor. QDialogs
         # get a "dialog" type hint that GNOME/others refuse to full-screen — that was the whole bug.
@@ -791,6 +1145,7 @@ class SeparationBoard(QWidget):
         self.preview_cb = preview_cb; self.preview_pattern_cb = preview_pattern_cb
         self.preview_original_cb = preview_original_cb; self.preview_both_cb = preview_both_cb
         self.preview_sound_cb = preview_sound_cb; self.stop_cb = stop_cb
+        self.preview_note_cb = preview_note_cb
         self._play_btn = None; self._sound_ph = QTimer(self); self._sound_ph.setSingleShot(True)
         self._sound_ph.timeout.connect(self._stop_playback)
         self.tracks = []; self._n = 0; self._color_seq = 0; self._is_full = False; self._docked = False
@@ -830,6 +1185,15 @@ class SeparationBoard(QWidget):
             lambda: QToolTip.showText(self.help_btn.mapToGlobal(self.help_btn.rect().bottomLeft()),
                                       help_txt, self.help_btn))
         top.addSpacing(10); top.addWidget(self.help_btn); top.addStretch(1)
+        # VOLUME ↔ NOTES: same take, two ways to draw it (hits/loudness vs a piano-roll of pitches)
+        top.addWidget(self._dim("draw"))
+        self._mode_btns = {}
+        for name, glyph, tip in (("volume", "▁ Volume", "Draw hits and loudness on the waveform"),
+                                 ("notes", "♪ Notes", "Piano-roll: trace the pitch you hummed and place notes")):
+            b = QPushButton(glyph); b.setCursor(Qt.PointingHandCursor); b.setFixedHeight(30); b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, n=name: self._set_mode(n))
+            self._mode_btns[name] = b; top.addWidget(b)
+        top.addSpacing(8)
         # tool selector: Pen (draw) · Grid (stretch tempo) · Fit (stretch a slice of audio)
         top.addWidget(self._dim("tool"))
         self._tool_btns = {}
@@ -867,7 +1231,9 @@ class SeparationBoard(QWidget):
         self.canvas.point_selected.connect(self.point_selected.emit)
         self.canvas.grid_scaled.connect(self._on_grid_scaled)
         self.canvas.fit_applied.connect(self._apply_fit)
+        self.canvas.key_pressed.connect(self._on_key_pressed)
         self._set_tool("pen")
+        self._set_mode("volume")
         mid.addWidget(self.canvas, 1)
 
         side = QVBoxLayout(); side.setSpacing(8)
@@ -1127,6 +1493,14 @@ class SeparationBoard(QWidget):
         for pt in tr["points"]:
             pt.setdefault("id", uid("p"))
 
+    def _on_key_pressed(self, midi):
+        """A piano key on the notes gutter was clicked → play the ACTIVE track's instrument at that
+        note (a tom in B♭, the synth at that pitch, …). Pure audition — nothing is placed."""
+        if not self.preview_note_cb or not (0 <= self.canvas.active < len(self.tracks)):
+            return
+        tr = self.tracks[self.canvas.active]
+        self.preview_note_cb(tr["kind"], tr["sound"], tr.get("params"), int(midi))
+
     def _preview_track(self, tr):
         btn = self._rows[self.tracks.index(tr)].b_prev if tr in self.tracks else self.b_prevall
         def go():
@@ -1161,6 +1535,11 @@ class SeparationBoard(QWidget):
         n = len(self.tracks); self.count.setText(f"{n} track{'s' if n != 1 else ''}"); self.canvas.update()
 
     # ---- timing tools (Pen / Grid / Fit) ----
+    def _set_mode(self, name):
+        self.canvas.set_mode(name)
+        for n, b in self._mode_btns.items():
+            b.setStyleSheet(_TOOL_ON if n == self.canvas.mode else _TOOL_OFF)
+
     def _set_tool(self, name):
         self.canvas.tool = name
         self.canvas.fit_a = self.canvas.fit_b = self.canvas._fit_b0 = None
@@ -1390,6 +1769,7 @@ class SeparationBoard(QWidget):
                     continue
                 beat, src_t = self._beat_of(pt, pt["t"], beat_len)
                 events.append(Event(lane_id=lid, beat=beat, vel=max(0.2, min(1.0, pt["v"])),
+                                    pitch=int(pt.get("midi", DEF_MIDI)),   # NOTES-tab pitch → plays at this note
                                     src_t=src_t, src_dur=0.28, src_track=lid, src_pts=[pt["id"]]))
         return (lane, events) if events else (None, [])
 

@@ -195,6 +195,45 @@ def hpss(buf, sr):
         return buf, buf
 
 
+# ---------------- pitch ribbon (VISUAL reference only) ----------------
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def note_name(midi):
+    """MIDI number → e.g. 'C#4' (MIDI 60 = C4)."""
+    m = int(round(float(midi)))
+    return f"{_NOTE_NAMES[m % 12]}{m // 12 - 1}"
+
+
+def pitch_ribbon(buf, sr, hop=512):
+    """Per-frame pitch of the WHOLE take, for the visual 'note ribbon' on the waveform. DISPLAY
+    ONLY — this never edits beats, assigns notes, or creates tracks; it just lets you SEE what note
+    you hummed so you can build the tracks by hand. Runs pYIN on the HARMONIC layer (so ts/kick
+    don't fake a pitch). Returns (t_frac, midi, voiced): arrays aligned in time, t_frac 0..1 over
+    the take, midi the float MIDI note, voiced a bool mask of where a real pitch was found. Empty
+    arrays if librosa is missing or the take is too short/silent."""
+    empty = (np.zeros(0, np.float32), np.zeros(0, np.float32), np.zeros(0, bool))
+    if not _HAS_LIBROSA or buf is None or len(buf) < 2048 or float(np.abs(buf).max()) < 1e-4:
+        return empty
+    h, _ = hpss(buf, sr)
+    try:
+        f0, voiced, vprob = librosa.pyin(h.astype(np.float32), fmin=65, fmax=1200, sr=sr,
+                                         frame_length=2048, hop_length=hop)
+    except Exception:
+        return empty
+    n = len(f0)
+    if n == 0:
+        return empty
+    dur = len(buf) / float(sr)
+    times = librosa.times_like(f0, sr=sr, hop_length=hop)
+    tfrac = (times / dur).astype(np.float32) if dur > 0 else times.astype(np.float32)
+    ok = np.isfinite(f0) & voiced & (vprob > 0.2)   # keep low-confidence frames so a held note doesn't gap
+    midi = np.full(n, np.nan, np.float32)
+    good = ok & (f0 > 0)
+    midi[good] = (69.0 + 12.0 * np.log2(f0[good] / 440.0)).astype(np.float32)
+    return tfrac, midi, ok.astype(bool)
+
+
 def melody_line(harmonic, sr, bpm, start_beat=0.0, min_note_beats=0.2):
     """Track the CONTINUOUS pitch of the harmonic layer and merge contiguous same-pitch frames
     into HELD notes — so a tone you hold behind the percussion becomes one long note (or a few
