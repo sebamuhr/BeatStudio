@@ -65,8 +65,10 @@ class CurveCanvas(QWidget):
     edited = Signal(int)          # a point gesture finished on track index (for live sync)
     point_selected = Signal(str)  # an anchor was picked → highlight the matching Studio beat
     grid_scaled = Signal(float)   # Grid tool dragged → a new bpm (uniform tempo stretch)
+    grid_moved = Signal()         # Grid tool moved sideways → grid offset changed (re-time the beats)
     fit_applied = Signal(float, float, float)   # Fit tool: (a_frac, b0_frac, new_b_frac) → resample
     key_pressed = Signal(int)     # a piano key in the notes gutter was clicked → audition this MIDI note
+    delete_take = Signal(int)     # the ✕ on a take (soundwave) was clicked → remove it + everything on it
 
     def __init__(self, buf, sr, bpm, tracks, parent=None):
         super().__init__(parent)
@@ -78,7 +80,9 @@ class CurveCanvas(QWidget):
         self.view0, self.view1 = 0.0, 1.0
         self.playhead = None                      # take-fraction 0..1, or None
         self.tool = "pen"                          # pen (draw) | grid (stretch tempo) | fit (stretch audio)
-        self._grid_grab = None                     # (grabbed beat number) while dragging the grid
+        self._grid_grab = None                     # (grabbed beat number) while STRETCHING the grid
+        self.grid_off = 0.0                        # grid phase offset in SECONDS (moves the grid sideways)
+        self._grid_pan = None                      # (start-x, start-offset) while MOVING the grid
         self.fit_a = None; self.fit_b = None       # Fit region endpoints (fractions of the active take)
         self._fit_b0 = None; self._fit_drag = False; self._fit_hover = None
         self.recording = False
@@ -166,6 +170,32 @@ class CurveCanvas(QWidget):
         n = max(1, len(self.takes)); bh = (y1 - y0) / n
         top = y0 + i * bh
         return top, bh, top + bh - 8, bh - 26
+
+    def _take_del_rect(self, i):
+        """The ✕ (delete-soundwave) button rect at the top-right of take-row i (volume mode)."""
+        top, _, _, _ = self._band(i); _, x1 = self._xspan()
+        return QRectF(x1 - 24, top + 5, 17, 17)
+
+    def _notes_del_rect(self):
+        """The ✕ for the take shown in notes mode (deletes the active take)."""
+        _, x1 = self._xspan(); y0, _ = self._notes_plot()
+        return QRectF(x1 - 24, y0 + 5, 17, 17)
+
+    def _hit_take_del(self, pos):
+        """Which take's ✕ was clicked (index), or None."""
+        if self.mode == "notes":
+            return self._active_band() if self._notes_del_rect().contains(pos) else None
+        for i in range(len(self.takes)):
+            if self._take_del_rect(i).contains(pos):
+                return i
+        return None
+
+    def _draw_del_x(self, p, r):
+        p.setBrush(QBrush(QColor(28, 20, 24, 205))); p.setPen(QPen(QColor(255, 90, 90, 130), 1))
+        p.drawRoundedRect(r, 4, 4)
+        p.setPen(QPen(QColor("#ff8a8a"), 1.8)); m = 5.0
+        p.drawLine(QPointF(r.left() + m, r.top() + m), QPointF(r.right() - m, r.bottom() - m))
+        p.drawLine(QPointF(r.right() - m, r.top() + m), QPointF(r.left() + m, r.bottom() - m))
 
     def set_active(self, i):
         self.active = i; self.active_changed.emit(i); self.update()
@@ -273,12 +303,13 @@ class CurveCanvas(QWidget):
         return max(0.0, min(1.0, self.view0 + (x - x0) / max(1.0, (x1 - x0)) * self._span()))
 
     def _snap_t(self, t):
-        """Snap a take-fraction to the nearest 16th-note on the tempo grid."""
+        """Snap a take-fraction to the nearest 16th-note on the (offset) tempo grid."""
         dur = len(self.buf) / self.sr
         if dur <= 0:
             return t
         sub = (60.0 / self.bpm) / 4.0
-        return min(1.0, max(0.0, (round((t * dur) / sub) * sub) / dur))
+        sec = round((t * dur - self.grid_off) / sub) * sub + self.grid_off
+        return min(1.0, max(0.0, sec / dur))
 
     def _lane_h(self):
         y0, y1 = self._notes_plot()
@@ -343,18 +374,29 @@ class CurveCanvas(QWidget):
                         p.drawLine(QPointF(x, cy), QPointF(x, cy - a))
             p.setFont(theme.sans(9, 600)); p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 210), 1))
             p.drawText(QRectF(x0 + 6, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
+            self._draw_del_x(p, self._take_del_rect(i))    # ✕ delete this whole soundwave (+ its tracks)
 
-        # bar lines span every row
+        # bar + beat lines span every row (shifted by the grid offset)
         if dur:
-            bar = int(self.view0 * dur / (beat_len * 4))
+            step = beat_len * 4
+            bar = int((self.view0 * dur - self.grid_off) / step) - 1
             while True:
-                tf = (bar * 4 * beat_len) / dur
+                tf = (bar * step + self.grid_off) / dur
                 if tf > self.view1:
                     break
-                if tf >= self.view0:
+                if self.view0 <= tf and tf >= 0:
                     x = self._to_px(tf, 0, 0).x()
                     p.setPen(QPen(QColor("#2c2c3a"), 1)); p.drawLine(int(x), int(y_top), int(x), int(y_bot))
                 bar += 1
+            beat = int((self.view0 * dur - self.grid_off) / beat_len) - 1        # fainter beat lines
+            while True:
+                tf = (beat * beat_len + self.grid_off) / dur
+                if tf > self.view1:
+                    break
+                if self.view0 <= tf and tf >= 0 and beat % 4 != 0:
+                    x = self._to_px(tf, 0, 0).x()
+                    p.setPen(QPen(QColor(255, 255, 255, 12), 1)); p.drawLine(int(x), int(y_top), int(x), int(y_bot))
+                beat += 1
 
         if self.recording:
             p.setFont(theme.sans(14, 600)); p.setPen(QPen(theme.REC, 1))
@@ -499,12 +541,12 @@ class CurveCanvas(QWidget):
             top = self._note_y(m) - lh / 2
             p.setPen(QPen(QColor(255, 255, 255, 16), 1)); p.drawLine(int(x0), int(top), int(x1), int(top))
         if dur:
-            sub = beat_len / 4.0; k = int(self.view0 * dur / sub)
+            sub = beat_len / 4.0; k = int((self.view0 * dur - self.grid_off) / sub) - 1
             while True:
-                tf = (k * sub) / dur
+                tf = (k * sub + self.grid_off) / dur
                 if tf > self.view1:
                     break
-                if tf >= self.view0:
+                if self.view0 <= tf and tf >= 0:
                     x = self._to_px_t(tf)
                     a = 55 if (k % 16 == 0) else (30 if (k % 4 == 0) else 12)
                     p.setPen(QPen(QColor(255, 255, 255, a), 1)); p.drawLine(int(x), int(y0), int(x), int(y1))
@@ -541,6 +583,8 @@ class CurveCanvas(QWidget):
         if self.playhead is not None and self.view0 <= self.playhead <= self.view1:
             x = self._to_px_t(self.playhead)
             p.setPen(QPen(theme.REC, 2)); p.drawLine(QPointF(x, y0), QPointF(x, y1))
+        if self.takes:
+            self._draw_del_x(p, self._notes_del_rect())    # ✕ delete this soundwave (+ its tracks)
         # hint / hover
         if not self.tracks:
             p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(12))
@@ -634,24 +678,35 @@ class CurveCanvas(QWidget):
                     return ("handle_" + side, self.active, pi)
         return None
 
-    # --- Grid tool: uniform tempo stretch (drag a beat, whole grid scales with it) ---
-    def _grid_press(self, pos):
+    # --- Grid tool: plain drag = MOVE the grid sideways (phase); Shift-drag = stretch tempo ---
+    def _grid_press(self, pos, stretch=False):
         dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
         t, _ = self._from_px(pos.x(), pos.y(), 0)
-        beat = (t * dur) / beat_len
-        self._grid_grab = beat if beat > 0.25 else None       # need a beat away from t=0 to scale
+        if stretch:                                           # Shift-drag: grab a beat and scale tempo
+            beat = (t * dur - self.grid_off) / beat_len
+            self._grid_grab = beat if beat > 0.25 else None
+            self._grid_pan = None
+        else:                                                 # plain drag: slide the whole grid sideways
+            self._grid_grab = None
+            self._grid_pan = (pos.x(), self.grid_off)
 
     def _grid_move(self, pos):
-        if not self._grid_grab:
-            return
-        dur = len(self.buf) / self.sr
-        t, _ = self._from_px(pos.x(), pos.y(), 0)
-        time = max(1e-3, t * dur)
-        new_beat_len = time / self._grid_grab                 # keep the grabbed beat under the cursor
-        bpm = max(40.0, min(300.0, 60.0 / new_beat_len))
-        self.bpm = bpm; self.update()
-        if self._emit_clock.elapsed() > 80:
-            self._emit_clock.restart(); self.grid_scaled.emit(float(bpm))
+        dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
+        if self._grid_grab:                                   # STRETCH (tempo)
+            t, _ = self._from_px(pos.x(), pos.y(), 0)
+            time = max(1e-3, t * dur - self.grid_off)
+            bpm = max(40.0, min(300.0, 60.0 / (time / self._grid_grab)))
+            self.bpm = bpm; self.update()
+            if self._emit_clock.elapsed() > 80:
+                self._emit_clock.restart(); self.grid_scaled.emit(float(bpm))
+        elif self._grid_pan is not None:                      # MOVE (phase offset)
+            x0, off0 = self._grid_pan; xa, xb = self._xspan()
+            dt = (pos.x() - x0) / max(1.0, (xb - xa)) * self._span() * dur
+            off = off0 + dt
+            off = ((off % beat_len) + beat_len) % beat_len    # one bar-beat of range is enough (grid repeats)
+            self.grid_off = off; self.update()
+            if self._emit_clock.elapsed() > 80:
+                self._emit_clock.restart(); self.grid_moved.emit()
 
     # --- Fit tool: pick A, pick B, then drag the B edge to stretch/shrink that slice of audio ---
     def _fit_press(self, ev, pos):
@@ -687,6 +742,10 @@ class CurveCanvas(QWidget):
 
     def mousePressEvent(self, ev):
         pos = ev.position()
+        if ev.button() == Qt.LeftButton:
+            di = self._hit_take_del(pos)
+            if di is not None:
+                self.delete_take.emit(di); return
         if self._mm_rect().contains(pos):
             if ev.button() == Qt.LeftButton:
                 self._pan_mm = True; r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update()
@@ -695,7 +754,7 @@ class CurveCanvas(QWidget):
             self._notes_press(ev, pos); return
         if self.tool == "grid":
             if ev.button() == Qt.LeftButton:
-                self._grid_press(pos)
+                self._grid_press(pos, bool(ev.modifiers() & Qt.ShiftModifier))
             return
         if self.tool == "fit":
             self._fit_press(ev, pos)
@@ -780,8 +839,8 @@ class CurveCanvas(QWidget):
         i = 0
         while i < len(pts) and pts[i]["t"] < t:
             i += 1
-        # from_notes → its TIME is owned by the Notes tab; in the Volume tab it's locked (volume only)
-        pts.insert(i, {"id": uid("p"), "t": t, "v": 0.8, "midi": m, "hx": 0.0, "hy": 0.0, "from_notes": True})
+        # a shared beat: pitch set here, volume in the Volume tab — freely movable in either tab
+        pts.insert(i, {"id": uid("p"), "t": t, "v": 0.8, "midi": m, "hx": 0.0, "hy": 0.0})
         self._note_drag = (self.active, i); self._select_point(pts[i]["id"])
         self.update(); self.edited.emit(self.active)
 
@@ -830,12 +889,10 @@ class CurveCanvas(QWidget):
         mode, ti, pi = self._drag; pts = self.tracks[ti]["points"]; pt = pts[pi]
         t, v = self._from_px(pos.x(), pos.y(), self._track_band(self.tracks[ti]))
         if mode == "anchor":
-            pt["v"] = v
-            if not pt.get("from_notes"):               # notes-created points: TIME is locked here (volume only)
-                lo = pts[pi - 1]["t"] + 1e-4 if pi > 0 else 0.0
-                hi = pts[pi + 1]["t"] - 1e-4 if pi < len(pts) - 1 else 1.0
-                pt["t"] = min(max(t, lo), hi)
-                pt.pop("beat", None)                   # moving on the board un-locks the grid beat
+            lo = pts[pi - 1]["t"] + 1e-4 if pi > 0 else 0.0
+            hi = pts[pi + 1]["t"] - 1e-4 if pi < len(pts) - 1 else 1.0
+            pt["t"] = min(max(t, lo), hi); pt["v"] = v   # free to move in time AND volume here
+            pt.pop("beat", None)                         # moving on the board un-locks the grid beat
         else:                                          # symmetric handle (out / in)
             hx, hy = t - pt["t"], v - pt["v"]
             if mode == "handle_in":
@@ -857,6 +914,9 @@ class CurveCanvas(QWidget):
             if self._grid_grab:
                 self._grid_grab = None
                 self.grid_scaled.emit(float(self.bpm))     # authoritative final tempo (+ undo)
+            if self._grid_pan is not None:
+                self._grid_pan = None
+                self.grid_moved.emit()                     # authoritative final offset (re-time + undo)
             self._pan_mm = False
             return
         if self.tool == "fit":
@@ -1198,7 +1258,7 @@ class SeparationBoard(QWidget):
         top.addWidget(self._dim("tool"))
         self._tool_btns = {}
         for name, glyph, tip in (("pen", "✎ Pen", "Draw sounds — place points on the wave"),
-                                 ("grid", "⇋ Grid", "Stretch the whole grid uniformly to match your beat"),
+                                 ("grid", "⇋ Grid", "Drag = move the grid sideways · Shift-drag = stretch tempo"),
                                  ("fit", "⤢ Fit", "Pick two points on the wave, then drag to stretch/shrink that audio")):
             b = QPushButton(glyph); b.setCursor(Qt.PointingHandCursor); b.setFixedHeight(30); b.setToolTip(tip)
             b.clicked.connect(lambda _=False, n=name: self._set_tool(n))
@@ -1230,8 +1290,10 @@ class SeparationBoard(QWidget):
         self.canvas.edited.connect(self._on_canvas_edited)
         self.canvas.point_selected.connect(self.point_selected.emit)
         self.canvas.grid_scaled.connect(self._on_grid_scaled)
+        self.canvas.grid_moved.connect(lambda: self.tracks_changed.emit(""))
         self.canvas.fit_applied.connect(self._apply_fit)
         self.canvas.key_pressed.connect(self._on_key_pressed)
+        self.canvas.delete_take.connect(self._delete_take)
         self._set_tool("pen")
         self._set_mode("volume")
         mid.addWidget(self.canvas, 1)
@@ -1406,7 +1468,8 @@ class SeparationBoard(QWidget):
         takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"].name(), "buf": tk["buf"]}
                  for tk in self.takes]                                          # buf by reference (cheap)
         return {"tracks": tracks, "takes": takes, "active_take": self._active_take,
-                "bpm": self.bpm, "n": self._n, "color_seq": self._color_seq}
+                "bpm": self.bpm, "n": self._n, "color_seq": self._color_seq,
+                "grid_off": self.canvas.grid_off}
 
     def restore(self, blob):
         import copy
@@ -1420,6 +1483,7 @@ class SeparationBoard(QWidget):
         self._active_take = blob.get("active_take")
         self.bpm = int(blob.get("bpm", self.bpm)); self.canvas.bpm = self.bpm
         self._n = blob.get("n", self._n); self._color_seq = blob.get("color_seq", self._color_seq)
+        self.canvas.grid_off = float(blob.get("grid_off", 0.0))
         self.tracks.clear()                                                    # mutate in place (canvas shares it)
         for t in blob["tracks"]:
             tr = copy.deepcopy({k: v for k, v in t.items() if k != "color"})
@@ -1488,6 +1552,40 @@ class SeparationBoard(QWidget):
             r._refresh_style(i == self.canvas.active)
         self.canvas.active_changed.emit(self.canvas.active); self._refresh()
         self.tracks_changed.emit(lane_id)              # tell the Studio to drop this lane
+
+    def _delete_take(self, ti):
+        """The ✕ on a soundwave → remove that take AND every track (beats/notes/volume) on it,
+        after confirmation. Removing everything leaves one empty (silent) Main row."""
+        if not (0 <= ti < len(self.takes)):
+            return
+        from PySide6.QtWidgets import QMessageBox
+        tk = self.takes[ti]
+        bound = [tr for tr in self.tracks if tr.get("take") == tk["id"]]
+        n = len(bound); trk = f" and its {n} track" + ("s" if n != 1 else "") if n else ""
+        box = QMessageBox(self); box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Delete soundwave")
+        box.setText(f"Delete “{tk['name']}”{trk}?")
+        box.setInformativeText("This removes its waveform and everything on it — beats, notes and volume.")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("Delete")
+        if box.exec() != QMessageBox.Yes:
+            return
+        for tr in bound:                                   # drop its tracks (rows + Studio lanes)
+            self._delete_track(tr)
+        self.takes.pop(ti)
+        if not self.takes:                                 # deleted the last one → keep a silent Main
+            self.takes = [{"id": uid("T"), "buf": np.zeros(self.sr, np.float32),
+                           "color": take_color(0), "name": "Main"}]
+        if self._active_take not in [t["id"] for t in self.takes]:
+            self._active_take = self.takes[0]["id"]
+        self.buf = self.takes[0]["buf"]
+        v0, v1 = self.canvas.view0, self.canvas.view1
+        self.canvas.active = min(self.canvas.active, len(self.tracks) - 1)
+        self.canvas.set_takes(self.takes)
+        self.canvas.view0, self.canvas.view1 = v0, v1
+        self.canvas.active_changed.emit(self.canvas.active); self._refresh()
+        self.tracks_changed.emit("")                       # structural resync (Studio drops the lanes)
 
     def _ensure_pt_ids(self, tr):
         for pt in tr["points"]:
@@ -1712,7 +1810,7 @@ class SeparationBoard(QWidget):
         if pt is not None and pt.get("beat") is not None:
             return float(pt["beat"]), float(pt["beat"]) * beat_len
         drawn_t = t_frac * (len(self.buf) / self.sr)      # exact drawn time → beat (fine, no onset snap)
-        return drawn_t / beat_len, self._src_t(t_frac)
+        return (drawn_t - self.canvas.grid_off) / beat_len, self._src_t(t_frac)   # relative to the moved grid
 
     def _lane_events(self, tr):
         self._ensure_pt_ids(tr)

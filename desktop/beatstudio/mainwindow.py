@@ -112,7 +112,8 @@ class MainWindow(QMainWindow):
         self._split.setHandleWidth(6)
         self._split.addWidget(studio)
         root.addWidget(self._split, 1)
-        self._one_screen = False
+        self._one_screen = True                 # default: separator docked ABOVE the studio (one window)
+        self.toolbar.set_layout_mode(True)
 
         # bottom settings panel (hidden until you open a track's gear)
         self.settings = SettingsPanel(self.project)
@@ -207,6 +208,10 @@ class MainWindow(QMainWindow):
         super().showEvent(ev)
         self.minimap.reposition(); self.minimap.raise_()
         self.zoombar.reposition(); self.zoombar.raise_()
+        if not getattr(self, "_shown_once", False):        # one-screen default: dock the separator on launch
+            self._shown_once = True
+            if self._one_screen:
+                QTimer.singleShot(0, self._open_separator)
 
     # ---- menu + persistence ----
     def _build_menu(self):

@@ -1,8 +1,34 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.31.0** (shown in the window title bar as
-`Beat Studio · v0.31.0`).
+continuing in a new chat.** Current version: **v0.32.0** (shown in the window title bar as
+`Beat Studio · v0.32.0`).
+
+## v0.32.0 — delete a soundwave (✕) + MOVE the grid sideways (phase offset)
+- **Delete a soundwave.** A small **✕** at the top-right of each take (top-right of the piano-roll in
+  Notes mode) removes that take **and every track on it** (beats/notes/volume + Studio lanes), after a
+  confirm dialog. Canvas `delete_take=Signal(int)` (hit-tested first in `mousePressEvent`) →
+  `SeparationBoard._delete_take`: confirms, drops bound tracks via `_delete_track`, pops the take,
+  keeps a silent Main if you delete the last one, fixes the active take + `self.buf`, resyncs. Verified:
+  deleting a secondary removes its bound track; deleting the last leaves an empty Main, no crash.
+- **Move the grid (phase offset).** The Grid tool could stretch tempo but not slide sideways, so a grid
+  line couldn't land on the first onset. New `canvas.grid_off` (seconds): **plain drag = MOVE** the grid
+  sideways, **Shift-drag = stretch tempo** (was plain drag). The offset shifts the drawn grid (volume
+  bars + beats, notes subdivisions) and the beat math (`_beat_of`, `_snap_t`) so points re-time to the
+  moved grid; it's board-only (the Studio is the musical view, beat 0 at t=0 — no offset needed there).
+  `grid_moved=Signal()` → board resyncs; round-trips in snapshot/restore (undo). Verified: move sets a
+  nonzero offset + re-times a point, tempo unchanged; Shift-drag still stretches; grid lines land on the
+  peaks (`scratchpad/grid_off1.png`). `board_check` updated (GRID stretch now Shift-drag + new GRID MOVE).
+- NOTE: `_beat_of` reads `self.canvas.grid_off` (grid_off lives on the CANVAS, not the board).
+- **Reverted the v0.31.0 horizontal-lock.** Notes-created points are NO LONGER time-locked in the
+  Volume tab — the user decided Notes just sets the notes, and the Volume tab should let you move points
+  freely (adapt to the grid, slide around) in BOTH time and volume. Dropped the `from_notes` flag and
+  the lock in the volume anchor-drag; all points move freely in either tab now.
+- **One-screen is now the DEFAULT.** `MainWindow._one_screen=True` at init (+ `toolbar.set_layout_mode(True)`);
+  `showEvent` opens the separator docked on first launch (`_shown_once` guard, `QTimer.singleShot(0,
+  _open_separator)`). So the app opens as one window (separator docked above the studio); the toolbar
+  toggle still flips to two windows. `board_check` LIFECYCLE test now floats the board first (its window
+  `w` is never shown, so a docked board isn't "visible").
 
 ## v0.31.0 — NOTES: vertical scroll (whole piano) + notes-created points are time-locked
 - **Scroll the piano up/down.** The NOTES view now shows a **NOTE_SPAN=30**-semitone window that
