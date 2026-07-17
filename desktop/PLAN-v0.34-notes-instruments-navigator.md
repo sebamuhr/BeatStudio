@@ -1,7 +1,7 @@
 # PLAN — v0.34: Notes line · Instrument restructure · Navigator unify · Soundwave controls · Global full screen
 
-**Status:** APPROVED-IN-PRINCIPLE, decisions locked below (user, 2026-07-17). Build all of it, then test
-as one — the user does NOT want to keep working against the old UI piece by piece.
+**Status:** ✅ BUILT (v0.34.0). All five items landed together and pass board_check (27 checks). This doc is
+kept as the design record; see PROGRESS.md v0.34.0 for the as-built summary and open follow-ups.
 
 **Overarching STABILITY RULE (do not violate):** the app is ONE track/data model edited from many views.
 Every edit must propagate to the Volume view, the Notes view, the Studio grid, playback AND undo. No

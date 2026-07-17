@@ -1,57 +1,73 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.33.0** (shown in the window title bar as
-`Beat Studio · v0.33.0`).
+continuing in a new chat.** Current version: **v0.34.0** (shown in the window title bar as
+`Beat Studio · v0.34.0`).
 
 ## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
 
 ### ▶▶ START HERE (next chat: "please continue the progress.md file")
-Items 1–2 are DONE & pushed (v0.32.2); take-select + left sidebar landed in v0.33.0. The remaining big
-items (#3 notes line, #4 instruments, #5 navigator) PLUS per-soundwave controls and a global full-screen
-fix are now spec'd in a detailed, decision-locked plan:
-**→ `PLAN-v0.34-notes-instruments-navigator.md` (read it first, then build in its BUILD ORDER).**
-The design Q&A is already resolved there (notes line = click-straight/hold-glide, pitched-only auto-connect,
-line=sustain/no-line=natural length; Hum = synthesized formant voices; navigator = copy the board's to the
-Studio). The only thing still needing a user thumbs-up before building #4 is the concrete content lists
-(which hums / synth presets / instrument categories) — propose them, get approval, then build.
+The whole v0.34 plan is now BUILT (v0.34.0): #3 notes line, #4 instrument restructure, #5 navigator unify,
+per-soundwave controls, and the global full-screen fix all landed together and pass `board_check` (27
+checks). Plan doc: `PLAN-v0.34-notes-instruments-navigator.md`. The v0.34.0 changelog below has the detail.
 
-Older framing (superseded by the plan above, kept for context):
-
-- **#3 Notes line — what does a line segment between two note points MEAN?** (pick one, or "both via a handle")
-  - *Pitch glide (portamento):* the note slides from the first point's pitch to the next — siren-like. Best for vocal melodies.
-  - *Held note (step):* each point holds its pitch until the next point, then jumps — classic piano-roll bars.
-  - *Both:* straight = glide, drag a handle = curve/hold — mirrors how the volume line already works (click=straight, drag=curve).
-- **#4 Instrument restructure — content decisions needed:** which **10+ hums**, which **10+ synth presets**,
-  and which **instrument categories** (user said "drum, strings, winds, etc… please check for more those
-  are just examples"). Decide: propose a full list for the user to approve, or have the user dictate it?
-- **#5 Navigator unify:** confirm the user prefers the board's **box-drag navigator** style (image #10)
-  and wants the Studio minimap/zoom pill remade to match it.
-- **Priority:** ask the user which of #3 / #4 / #5 to build first (my recommendation: **#3 notes line**,
-  since it directly fixes the "notes side is too rough" pain and is smaller than #4).
+**Open follow-ups the USER should verify / decide next (I can't hear audio):**
+- **Sound quality pass:** the 12 hum voices and 32 instrument recipes are synthesized and UNHEARD by me —
+  the user should audition them and tell me which to retune (they all have knob stacks to tweak). Same for
+  the notes-line glide (drum/hum/inst gliding along a pitch track).
+- **Per-wave Volume/Notes = phase 1** (each wave REMEMBERS its last view and restores it on select). True
+  simultaneous mixed-mode (wave A shows Notes while wave B shows Volume in the same paint) is deferred —
+  confirm phase-1 is enough.
+- **Two-screen full screen** currently full-screens BOTH windows; confirm that's what "global" should do
+  (vs only the focused window).
+- **Held-note last-pitch duration:** a HELD run's final note rings out at its natural length; fine for now,
+  revisit if it feels short. Curve SHAPE of a glide is linear (portamento) — bending via a real handle is a
+  later refinement.
+- Legacy web-app deletion at the repo root is still pending (user-approved back in v0.28).
 
 **STABILITY RULE (overarching):** the app is ONE track/data model edited from many views — every edit
 must propagate to the volume view, notes view, Studio grid, playback AND undo. Don't add parallel data;
 wire through the shared point/lane/take model + `tracks_changed`/`take_audio_changed`/`_board_fp`.
-1. [x] **Finer notes grid** — snap was 1/16 note; now `NOTE_SNAP_DIV=48` (1/48 of a beat).
-2. [x] **Remove the "⊞ Separator" toolbar button** — obsolete (one-screen default, board always present).
-3. [ ] **A LINE between points in the NOTES view** (like the volume Bézier) → sustained notes + glides/
-   variants. Notes are discrete pitched hits today; add the same curve tool so a held/sliding note can be
-   drawn. NEEDS DESIGN (see START HERE): pitch glide vs held note vs both.
-   - Implementation notes: notes live in per-point `midi` on the shared `points` list (`_notes_press/
-     _notes_move` in `separationboard.py`); pitched playback already works via `Event.pitch` +
-     `synth.sample_voice`/`voice`. A "line" likely = a per-segment curve (reuse `seg_ctrls`/`_sample_curve`
-     from the volume Bézier) that emits ONE sustained `Event` with an `env`/pitch-track (drums = resample
-     glide `synth.sample_voice(..., loop=True)`; synth already has `morph_glide`/`glide_voice`).
-4. [ ] **Instrument picker restructure (BIG).** Pull **Synth** + **Original** OUT of the dropdown into a
-   top-level selector **Original · Hum · Synth · Instrument**: Original = your recording; Hum = pick from
-   **≥10 hum voices**; Synth = **≥10 synth presets**; Instrument = **categories** (drum, strings, winds, …)
-   with many more than today's ~15. NEEDS CONTENT DECISIONS (see START HERE) + engine work.
-5. [ ] **Unify the navigator/zoom** — Studio minimap+zoom pill and the board navigator should behave the
-   same; user prefers the box-drag style (image #10). NEEDS the two current implementations compared.
-6. [x] **Select WHICH soundwave you're editing** (v0.33.0) — checkbox per take; notes/points/new tracks
-   scope to it. See below.
-7. [x] **Board track list moved to the LEFT** (v0.33.0) — every menu in the app is now left-side.
+
+Roadmap status (all items done):
+1. [x] **Finer notes grid** (v0.32.2) — `NOTE_SNAP_DIV=48`.
+2. [x] **Remove the "⊞ Separator" button** (v0.32.2).
+3. [x] **A LINE between points in the NOTES view** (v0.34.0) — held bars + glides; see below.
+4. [x] **Instrument picker restructure** (v0.34.0) — Original·Hum·Synth·Instrument; 12 hums, 32 instruments.
+5. [x] **Unify the navigator/zoom** (v0.34.0) — Studio minimap is now the board's box-drag style.
+6. [x] **Select WHICH soundwave you're editing** (v0.33.0) — checkbox per take.
+7. [x] **Board track list moved to the LEFT** (v0.33.0).
+
+## v0.34.0 — Notes line (held + glide) · Original·Hum·Synth·Instrument · per-wave controls · box navigator · global full screen
+Five things built together (the user wanted the whole UI change at once, then to test it):
+- **#3 NOTES LINE (ties).** A line between note points means the note SUSTAINS. Same pen gesture as the
+  volume line: **click = a HELD note** (a piano-roll bar lasting until the next point), **click-and-hold
+  while placing = a GLIDE** (pitch slide); **right-click a line removes just that tie**. Only PITCHED
+  instruments auto-connect successive clicks (`_is_pitched`); drums stay separate hits. **No line = the
+  sound plays its natural length** (kick decays, piano rings). Model: shared point `tie`/`glide`
+  (horizontal → shows in BOTH views); `Event.pitch_track` (per-step MIDI). A tied run → piano-roll bars for
+  held segments + ONE sliding note (pitch_track) per glide chain, the last note ringing out. `render.
+  _voice_for` glides drum/sample/synth via `glide_voice`, hum via `hum_voice`, inst via `inst_voice`. The
+  volume view only connects tied instrument points, so both views show the same gaps.
+- **#4 INSTRUMENT RESTRUCTURE.** The board picker is a top-level **Original · Hum · Synth · Instrument**
+  selector (`TrackRow._on_group`/`_refresh_group_ui`, `GROUPS`/`_group_items`). Hum = **12 synthesized
+  VOWEL voices** (formant synthesis: `synth.hum_voice`/`HUM_SPECS`/`HUM_KNOBS`) with their own knob stack;
+  glides for free (oscillator). Instrument = **47 sounds** in categories (Drum + Mallets/Keys/Strings/
+  Winds/Brass/Bass/Bells) via `synth.inst_voice`/`INST_SPECS`/`INST_CATEGORIES` (parametric partials+
+  envelope, pitched + glide-capable). Synth keeps the Base+Modulator designer. Hum knobs live in
+  `track["hum_params"]` (separate from synth `params`). Old projects still load.
+- **#6 PER-SOUNDWAVE CONTROLS.** Each take row has **Solo (S) / Mute (M)** buttons + the select checkbox +
+  a ✕; double-click the name to **rename**. Solo/Mute a wave → every track bound to it inherits it at render
+  (authoritative for the wave's auto lanes via the upsert). Add-track binds under the selected wave. Each
+  wave **remembers its Volume/Notes view** and restores it on select (`_restore_take_mode`; phase 1).
+- **#5 NAVIGATOR UNIFY.** The Studio minimap is now the same **box-drag viewport navigator** as the board
+  (a translucent cyan box you drag to pan, no on-grid "mirror" marker) — `minimap._view_box`.
+- **#7 GLOBAL FULL SCREEN.** A full-screen button on the Studio toolbar (F11) covers BOTH windows in
+  two-screen mode (was board-only). The screens button REOPENS a separator that was closed in two-screen
+  mode instead of stranding it.
+- Verified headless: `board_check` grew FULLSCREEN, NOTES LINE, WAVE CONTROLS, INSTRUMENTS, NAVIGATOR
+  checks — **27 checks, all green**. Screenshots in `scratchpad/` (notes_line, instruments, navigator,
+  take_volume/notes). NOTE: audio is UNHEARD by the assistant — the user should audition the voices/glides.
 
 ## v0.33.0 — pick the soundwave you're working on (checkbox per take) · track list moved left
 User: recording a secondary gave two stacked waves with no way to say "I'm editing THIS one" — clicking

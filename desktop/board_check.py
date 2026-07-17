@@ -451,6 +451,20 @@ w._toggle_layout(); app.processEvents()               # screens button → reope
 assert bd.isVisible() and not w._one_screen, "screens button did not reopen the closed separator"
 print("FULLSCREEN ok: global full screen covers both windows; screens button reopens a closed separator")
 
+# NAVIGATOR (#5): the Studio minimap is a box-drag navigator (like the board) — a viewport box,
+# no on-grid mirror, and dragging it pans the timeline.
+w.timeline.set_ppb(80); app.processEvents()
+mm = w.minimap; mm._expanded = True
+mw, mh, _ = mm._map_size(); vb = mm._view_box(mw, mh)
+assert vb.width() > 0 and vb.height() > 0, "minimap has no viewport box"
+from PySide6.QtCore import QPointF as _QP
+sx0 = w.timeline.horizontalScrollBar().value()
+mm._dragging = True; mm._go(_QP(mw * 0.8, mh * 0.5)); app.processEvents()
+assert w.timeline.horizontalScrollBar().value() != sx0, "dragging the navigator did not pan"
+assert w.timeline.mirror is None, "navigator should not draw an on-grid mirror (board-style box only)"
+mm._dragging = False
+print("NAVIGATOR ok: Studio minimap is a box-drag navigator (matches the board); drag pans")
+
 # LIFECYCLE: closing the Studio closes the separator (float it out first — separate-window path)
 w._float_board(); app.processEvents()
 assert bd.isVisible(); w.close(); app.processEvents()

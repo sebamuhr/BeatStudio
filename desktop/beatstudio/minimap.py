@@ -1,6 +1,6 @@
-"""Bottom-right minimap: an EXACT miniature of the whole grid with a draggable location
-dot. Hover the corner to expand; drag the dot to move (it can reach every corner) and a
-translucent 'mirror' circle shows the spot on the real grid. Ports the web v0.7.6 minimap.
+"""Bottom-right minimap: an EXACT miniature of the whole grid with a draggable VIEWPORT BOX —
+the same box-drag navigator the Separation Board uses, so both windows feel identical. Hover
+the corner to expand; drag the box (or click) to pan the grid in both axes.
 """
 from __future__ import annotations
 from PySide6.QtWidgets import QWidget
@@ -58,6 +58,16 @@ class Minimap(QWidget):
         return (min(tw, tl.horizontalScrollBar().value() + vw / 2),
                 min(th, tl.verticalScrollBar().value() + vh / 2))
 
+    def _view_box(self, w, h):
+        """The visible-viewport rectangle mapped into the minimap (the draggable box)."""
+        tw, th = self._totals(); tl = self.timeline
+        vw, vh = tl.viewport().width(), tl.viewport().height()
+        sx, sy = tl.horizontalScrollBar().value(), tl.verticalScrollBar().value()
+        bx = sx / tw * w; by = sy / th * h
+        bw = max(6.0, min(w, vw / tw * w)); bh = max(6.0, min(h, vh / th * h))
+        bx = min(max(0.0, bx), w - bw); by = min(max(0.0, by), h - bh)
+        return QRectF(bx, by, bw, bh)
+
     # ---- hover expand/collapse ----
     def enterEvent(self, _):
         self._expanded = True
@@ -83,7 +93,8 @@ class Minimap(QWidget):
             self.update()
 
     def _push_mirror(self):
-        self.timeline.mirror = self._loc_now() if self._expanded else None
+        # The board navigator has no on-grid "mirror" marker — keep the two consistent (box only).
+        self.timeline.mirror = None
         self.timeline.viewport().update()
 
     # ---- paint ----
@@ -113,12 +124,10 @@ class Minimap(QWidget):
                        theme.lane_color(i))
         p.setPen(QPen(theme.BORDER_2, 1)); p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 8, 8)
-        # location dot
-        tw, th = self._totals(); lx, ly = self._loc_now()
-        cx = max(6, min(w - 6, lx / tw * w)); cy = max(6, min(h - 6, ly / th * h))
-        p.setPen(Qt.NoPen); p.setBrush(QColor(61, 214, 255, 60)); p.drawEllipse(QPointF(cx, cy), 9, 9)
-        p.setBrush(theme.ACCENT_CY); p.drawEllipse(QPointF(cx, cy), 6, 6)
-        p.setPen(QPen(QColor("#fff"), 2)); p.setBrush(Qt.NoBrush); p.drawEllipse(QPointF(cx, cy), 6, 6)
+        # VIEWPORT BOX (drag it to pan) — the same box-drag navigator the Separation Board uses, so
+        # both windows feel identical. The box = the region you can currently see, in both axes.
+        p.setPen(QPen(theme.ACCENT_CY, 1.4)); p.setBrush(QColor(61, 214, 255, 45))
+        p.drawRoundedRect(self._view_box(w, h), 3, 3)
 
     # ---- drag ----
     def mousePressEvent(self, ev):
@@ -145,5 +154,5 @@ class Minimap(QWidget):
         vw, vh = tl.viewport().width(), tl.viewport().height()
         tl.horizontalScrollBar().setValue(int(max(0, lx - vw / 2)))
         tl.verticalScrollBar().setValue(int(max(0, ly - vh / 2)))
-        tl.mirror = (lx, ly); tl.viewport().update()
+        tl.viewport().update()
         self.update()
