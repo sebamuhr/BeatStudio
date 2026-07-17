@@ -50,6 +50,7 @@ _BLACK_KEYS = {1, 3, 6, 8, 10}   # pitch-classes that are black keys on the pian
 DEF_MIDI = 60                    # default pitch (C4 = natural) for a point until you set it in NOTES
 PIANO_MIN, PIANO_MAX = 21, 108   # full piano (A0..C8) — scroll the NOTES view anywhere in here
 NOTE_SPAN = 30                   # semitones visible at once in NOTES mode (scroll for the rest)
+NOTE_SNAP_DIV = 48               # notes snap to 1/48 of a beat (super fine — accurate placement)
 # each take (main + overdubs) gets its own row + waveform colour
 TAKE_HEX = ["#ff6b6b", "#c0a8ff", "#5cd6c0", "#ffd24d", "#ff8c5c", "#6ecbff"]
 
@@ -303,11 +304,12 @@ class CurveCanvas(QWidget):
         return max(0.0, min(1.0, self.view0 + (x - x0) / max(1.0, (x1 - x0)) * self._span()))
 
     def _snap_t(self, t):
-        """Snap a take-fraction to the nearest 16th-note on the (offset) tempo grid."""
+        """Snap a take-fraction to the FINE notes grid (1/NOTE_SNAP_DIV of a beat) so pitch placement
+        is accurate — much finer than the 16th-note beat lines that are drawn."""
         dur = len(self.buf) / self.sr
         if dur <= 0:
             return t
-        sub = (60.0 / self.bpm) / 4.0
+        sub = (60.0 / self.bpm) / NOTE_SNAP_DIV
         sec = round((t * dur - self.grid_off) / sub) * sub + self.grid_off
         return min(1.0, max(0.0, sec / dur))
 

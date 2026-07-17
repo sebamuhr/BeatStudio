@@ -113,17 +113,8 @@ class Toolbar(QWidget):
         # are still called) but hide it from the main screen.
         self.rec_master.setParent(self); self.rec_master.hide()
 
-        # Open the Separation Board (the "master track" separator) — a separate window you can
-        # park on a 2nd monitor and open/close without losing your work.
-        self.sep_btn = QPushButton("⊞  Separator")
-        self.sep_btn.setFixedHeight(54); self.sep_btn.setCursor(Qt.PointingHandCursor)
-        self.sep_btn.setFont(theme.sans(13, 600))
-        self.sep_btn.setStyleSheet(
-            "QPushButton{background:rgba(61,214,255,0.12);border:1px solid #2f6d8a;"
-            "border-radius:12px;color:#8fe6ff;padding:0 16px;}"
-            "QPushButton:hover{background:rgba(61,214,255,0.20);}")
-        self.sep_btn.clicked.connect(self.open_separator.emit)
-        lay.addWidget(self.sep_btn)
+        # (The "⊞ Separator" button was removed — the board is always present now, one-screen by
+        # default. `open_separator` stays as a signal for the launch/record flow.)
 
         # live input level meter (only visible while recording)
         self.meter = _LevelMeter()

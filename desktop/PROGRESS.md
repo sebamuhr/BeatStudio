@@ -1,8 +1,30 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.32.1** (shown in the window title bar as
-`Beat Studio · v0.32.1`).
+continuing in a new chat.** Current version: **v0.32.2** (shown in the window title bar as
+`Beat Studio · v0.32.2`).
+
+## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
+**STABILITY RULE (overarching):** the app is ONE track/data model edited from many views — every edit
+must propagate to the volume view, notes view, Studio grid, playback AND undo. Don't add parallel data;
+wire through the shared point/lane/take model + `tracks_changed`/`take_audio_changed`/`_board_fp`.
+1. [x] **Finer notes grid** — snap was 1/16 note; now `NOTE_SNAP_DIV=48` (1/48 of a beat).
+2. [x] **Remove the "⊞ Separator" toolbar button** — obsolete (one-screen default, board always present).
+3. [ ] **A LINE between points in the NOTES view** (like the volume Bézier) → sustained notes + glides/
+   variants. Notes are discrete pitched hits today; add the same curve tool so a held/sliding note can be
+   drawn. NEEDS DESIGN: how a curve segment maps to a sustained/gliding Event (pitch glide vs held note).
+4. [ ] **Instrument picker restructure (BIG).** Pull **Synth** + **Original** OUT of the dropdown into a
+   top-level selector **Original · Hum · Synth · Instrument**: Original = your recording; Hum = pick from
+   **≥10 hum voices**; Synth = **≥10 synth presets**; Instrument = **categories** (drum, strings, winds, …)
+   with many more than today's ~15. NEEDS CONTENT DECISIONS (which hums/synths/categories) + engine work.
+5. [ ] **Unify the navigator/zoom** — Studio minimap+zoom pill and the board navigator should behave the
+   same; user prefers the box-drag style. NEEDS the two current implementations compared.
+
+## v0.32.2 — finer notes grid + removed the Separator button
+- **Notes snap is now super-fine:** `_snap_t` uses `NOTE_SNAP_DIV=48` (1/48 of a beat) instead of the
+  1/16-note grid, so notes place accurately (the drawn beat lines stay at 1/16 for readability).
+- **Removed the `⊞ Separator` toolbar button** (`toolbar.sep_btn`) — the board is always present now
+  (one-screen default); the launch/record flow still opens it. `open_separator` signal kept (unused by UI).
 
 ## v0.32.1 — Fit stretches the ACTUAL sound · Grid = left-stretch/right-move · undo covers audio
 Three bugs the user hit:
