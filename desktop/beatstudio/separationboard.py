@@ -60,6 +60,23 @@ def take_color(i):
     return QColor(TAKE_HEX[i % len(TAKE_HEX)])
 
 
+def _is_pitched(tr):
+    """Pitched instruments AUTO-connect successive note clicks (a melody line). Drums/original do
+    NOT — three clicks stay three hits. (A drum can still be TIED by hand; this only gates the
+    automatic tie-on-click.)"""
+    return tr.get("kind") in ("synth", "hum", "inst", "sample")
+
+
+def _seg_dist(px, py, ax, ay, bx, by):
+    """Distance from point (px,py) to the segment (ax,ay)-(bx,by), in pixels."""
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    if L2 <= 1e-6:
+        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+    tt = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L2))
+    return ((px - (ax + tt * dx)) ** 2 + (py - (ay + tt * dy)) ** 2) ** 0.5
+
+
 # ---------------------------------------------------------------- the canvas
 class CurveCanvas(QWidget):
     """Waveform + hand-drawn pen-tool lines with draggable dots, zoom/pan, navigator, playhead."""
@@ -99,6 +116,8 @@ class CurveCanvas(QWidget):
         self.mode = "volume"       # "volume" (hits/loudness, as always) | "notes" (piano-roll)
         self.note_lo, self.note_hi = 36, 84   # visible pitch range in notes mode (C2..C6)
         self._note_drag = None     # (track_idx, note_idx) while dragging a note in the piano-roll
+        self._tie_left = None       # while placing a tied note: the LEFT point of the new segment
+        self._place_pos = None      # press position, to tell a plain click (held) from a drag (glide)
         self.takes = []
         # WHICH soundwave you are working on. Authoritative: the notes view, point placement and new
         # tracks all scope to it, and the active track is always one of THIS take's tracks.
@@ -406,6 +425,23 @@ class CurveCanvas(QWidget):
         return None
 
 
+    def _hit_segment(self, pos):
+        """A TIE line of the active track near the cursor → the LEFT point of that segment, else None.
+        Held segments are a horizontal bar at the left pitch; glide segments are the a→b line."""
+        if not (0 <= self.active < len(self.tracks)):
+            return None
+        pts = sorted(self.tracks[self.active].get("points") or [], key=lambda p: p["t"])
+        for k in range(len(pts) - 1):
+            a, b = pts[k], pts[k + 1]
+            if not a.get("tie"):
+                continue
+            ax, ay = self._to_px_t(a["t"]), self._note_y(a.get("midi", DEF_MIDI))
+            bx = self._to_px_t(b["t"])
+            by = self._note_y(b.get("midi", DEF_MIDI)) if a.get("glide") else ay
+            if _seg_dist(pos.x(), pos.y(), ax, ay, bx, by) < 6.0:
+                return a
+        return None
+
     # --- painting ---
     def paintEvent(self, _):
         p = QPainter(self); p.setRenderHint(QPainter.Antialiasing, True)
@@ -493,12 +529,19 @@ class CurveCanvas(QWidget):
                 continue
             bi = self._track_band(tr)
             col = tr["color"]; active = (ti == self.active); pts = tr["points"]
+            # A SYNTH line is one continuous envelope (always connect). An INSTRUMENT connects only
+            # TIED points — an untied gap = a hit that ends at its natural length (the same break the
+            # NOTES view shows), so the two views agree.
+            always = tr.get("kind") in ("synth", "original")
             if len(pts) >= 2:                          # smooth cubic-Bézier through the anchors
-                path = QPainterPath(); path.moveTo(self._apx(pts[0], bi))
+                p.setPen(QPen(col, 2.6 if active else 1.4)); p.setBrush(Qt.NoBrush)
                 for i in range(len(pts) - 1):
+                    if not (always or pts[i].get("tie")):
+                        continue
                     c0, c1 = seg_ctrls(pts, i)
-                    path.cubicTo(self._to_px(c0[0], c0[1], bi), self._to_px(c1[0], c1[1], bi), self._apx(pts[i + 1], bi))
-                p.setPen(QPen(col, 2.6 if active else 1.4)); p.setBrush(Qt.NoBrush); p.drawPath(path)
+                    seg = QPainterPath(); seg.moveTo(self._apx(pts[i], bi))
+                    seg.cubicTo(self._to_px(c0[0], c0[1], bi), self._to_px(c1[0], c1[1], bi), self._apx(pts[i + 1], bi))
+                    p.drawPath(seg)
             if active:                                 # tangent handles (circles) like a pen tool
                 for pt in pts:
                     if not (pt["hx"] or pt["hy"]):
@@ -643,7 +686,25 @@ class CurveCanvas(QWidget):
             if not tr.get("visible", True) or self._track_band(tr) != ab:
                 continue
             active = (ti == self.active)
-            for nt in (tr.get("points") or []):
+            spts = sorted(tr.get("points") or [], key=lambda q: q["t"])
+            # TIE LINES first (behind the note blocks): HELD = a horizontal bar at the left pitch
+            # spanning to the next point; GLIDE = a sloped line connecting the two pitches.
+            for k in range(len(spts) - 1):
+                a, b = spts[k], spts[k + 1]
+                if not a.get("tie"):
+                    continue
+                ax = self._to_px_t(a["t"]); ay = self._note_y(a.get("midi", DEF_MIDI))
+                bx = self._to_px_t(b["t"]); by = self._note_y(b.get("midi", DEF_MIDI))
+                if bx < x0 - 8 or ax > x1 + 8:
+                    continue
+                col = self._pitch_color(a.get("midi", DEF_MIDI))
+                col.setAlpha(230 if active else 110)
+                if a.get("glide"):
+                    p.setPen(QPen(col, 3.2 if active else 2)); p.drawLine(QPointF(ax, ay), QPointF(bx, by))
+                else:                                       # held: a fat horizontal bar (piano-roll note)
+                    p.setPen(Qt.NoPen); p.setBrush(QBrush(col))
+                    p.drawRoundedRect(QRectF(ax, ay - lh * 0.22, bx - ax, lh * 0.44), 3, 3)
+            for nt in spts:
                 mm = nt.get("midi", DEF_MIDI)
                 x = self._to_px_t(nt["t"]); yc = self._note_y(mm)
                 if not (x0 - 8 <= x <= x1 + 8):
@@ -940,9 +1001,13 @@ class CurveCanvas(QWidget):
             return
         pts = self.tracks[self.active].setdefault("points", [])
         hit = self._notes_hit(pos)
-        if ev.button() == Qt.RightButton:                  # right-click a point → delete (both tabs)
+        if ev.button() == Qt.RightButton:                  # right-click a point → delete; a LINE → cut it
             if hit is not None:
                 pts.pop(hit); self.update(); self.edited.emit(self.active)
+            else:
+                seg = self._hit_segment(pos)               # right-click a line → remove just that line
+                if seg is not None:
+                    seg["tie"] = False; self.update(); self.edited.emit(self.active)
             return
         if ev.button() != Qt.LeftButton:
             return
@@ -956,7 +1021,15 @@ class CurveCanvas(QWidget):
         while i < len(pts) and pts[i]["t"] < t:
             i += 1
         # a shared beat: pitch set here, volume in the Volume tab — freely movable in either tab
-        pts.insert(i, {"id": uid("p"), "t": t, "v": 0.8, "midi": m, "hx": 0.0, "hy": 0.0})
+        pts.insert(i, {"id": uid("p"), "t": t, "v": 0.8, "midi": m, "hx": 0.0, "hy": 0.0,
+                       "tie": False, "glide": False})
+        # PITCHED instruments auto-connect successive clicks: tie the previous point to this one
+        # (a melody line). Plain click = HELD (step); drag while placing = GLIDE (set in _notes_move).
+        self._tie_left = None
+        if i > 0 and _is_pitched(self.tracks[self.active]):
+            prev = pts[i - 1]; prev["tie"] = True; prev["glide"] = False
+            self._tie_left = prev
+        self._place_pos = pos
         self._note_drag = (self.active, i); self._select_point(pts[i]["id"])
         self.update(); self.edited.emit(self.active)
 
@@ -972,6 +1045,10 @@ class CurveCanvas(QWidget):
         nt = pts[ni]
         nt["t"] = self._snap_t(self._t_at_x(pos.x()))
         nt["midi"] = max(self.note_lo, min(self.note_hi, int(round(self._midi_at_y(pos.y())))))
+        # dragged while placing a tied note → that segment GLIDES (a pitch slide, not a step)
+        if self._tie_left is not None and self._place_pos is not None:
+            if (pos - self._place_pos).manhattanLength() > 6:
+                self._tie_left["glide"] = True
         self.update()
         if self._emit_clock.elapsed() > 80:
             self._emit_clock.restart(); self.edited.emit(ti)
@@ -1024,6 +1101,7 @@ class CurveCanvas(QWidget):
                 ti = self._note_drag[0]; self._note_drag = None
                 pts = self.tracks[ti].get("points") or []; pts.sort(key=lambda q: q["t"])
                 self.edited.emit(ti)
+            self._tie_left = None; self._place_pos = None
             self._pan_mm = False
             return
         if self.tool == "grid":
@@ -1767,6 +1845,42 @@ class SeparationBoard(QWidget):
     def _ensure_pt_ids(self, tr):
         for pt in tr["points"]:
             pt.setdefault("id", uid("p"))
+            pt.setdefault("tie", False)      # a LINE runs from this point to the next (sustained note)
+            pt.setdefault("glide", False)    # that line GLIDES (pitch slide) vs HELD (step) — NOTES view
+
+    @staticmethod
+    def _tied_runs(pts):
+        """Split points (sorted by t) into RUNS: a run is a maximal group joined by `tie` on each
+        point except the last. A lone point = a run of one (a normal one-shot hit)."""
+        runs = []
+        i = 0
+        while i < len(pts):
+            j = i
+            while j < len(pts) - 1 and pts[j].get("tie"):
+                j += 1
+            runs.append(pts[i:j + 1]); i = j + 1
+        return runs
+
+    def _pitch_track_of(self, run, n=64):
+        """Sample the run's MIDI over [t0,t1] into n steps. HELD segment (glide=False) = staircase
+        (hold the left pitch, jump at the next point); GLIDE segment (glide=True) = linear slide."""
+        t0, t1 = float(run[0]["t"]), float(run[-1]["t"])
+        if t1 <= t0:
+            return [int(run[0].get("midi", DEF_MIDI))]
+        ts = np.linspace(t0, t1, n)
+        out = np.empty(n, np.float32)
+        for k, t in enumerate(ts):
+            si = 0
+            while si < len(run) - 1 and float(run[si + 1]["t"]) < t:
+                si += 1
+            a, b = run[si], run[min(si + 1, len(run) - 1)]
+            ma, mb = float(a.get("midi", DEF_MIDI)), float(b.get("midi", DEF_MIDI))
+            ta, tb = float(a["t"]), float(b["t"])
+            if a.get("glide") and tb > ta:
+                out[k] = ma + (mb - ma) * (t - ta) / (tb - ta)   # slide
+            else:
+                out[k] = ma                                      # hold (step)
+        return [round(float(x), 2) for x in out]
 
     def _on_key_pressed(self, midi):
         """A piano key on the notes gutter was clicked → play the ACTIVE track's instrument at that
@@ -2038,15 +2152,46 @@ class SeparationBoard(QWidget):
                                 env=[round(float(x), 3) for x in env],
                                 src_track=lid, src_pts=[p["id"] for p in pts]))
         else:
-            # INSTRUMENT: each point above 0 is a BEAT MARK — a hit whose volume (velocity) is the
-            # point's height on the 0–10 scale.
-            for pt in pts:
-                if pt["v"] <= SILENCE:
-                    continue
+            # INSTRUMENT: points are BEAT MARKS. A lone point = a one-shot hit (velocity = its 0–10
+            # height). A LINE between points (a tied run in the NOTES view) means the note sustains:
+            #   • HELD segment (straight)  → a piano-roll bar: a steady note that lasts until the next
+            #   • GLIDE segment (curved)   → the pitch SLIDES; consecutive glides merge into one note
+            # No line = the point plays its natural length (a kick decays, a piano rings).
+            dur = len(self.buf) / self.sr
+
+            def _hit(pt):
                 beat, src_t = self._beat_of(pt, pt["t"], beat_len)
-                events.append(Event(lane_id=lid, beat=beat, vel=max(0.2, min(1.0, pt["v"])),
-                                    pitch=int(pt.get("midi", DEF_MIDI)),   # NOTES-tab pitch → plays at this note
-                                    src_t=src_t, src_dur=0.28, src_track=lid, src_pts=[pt["id"]]))
+                return Event(lane_id=lid, beat=beat, vel=max(0.2, min(1.0, pt["v"])),
+                             pitch=int(pt.get("midi", DEF_MIDI)),
+                             src_t=src_t, src_dur=0.28, src_track=lid, src_pts=[pt["id"]])
+
+            for run in self._tied_runs([p for p in pts if p["v"] > SILENCE]):
+                if len(run) == 1:
+                    events.append(_hit(run[0])); continue
+                n = len(run); i = 0; consumed_last = False
+                while i < n - 1:
+                    a = run[i]
+                    if a.get("glide"):                         # merge a chain of glide segments
+                        j = i
+                        while j < n - 1 and run[j].get("glide"):
+                            j += 1
+                        beat, src_t = self._beat_of(a, a["t"], beat_len)
+                        length = max(0.05, (float(run[j]["t"]) - float(a["t"])) * dur / beat_len)
+                        events.append(Event(lane_id=lid, beat=beat, vel=max(0.2, min(1.0, a["v"])),
+                                            pitch=int(a.get("midi", DEF_MIDI)), length=length,
+                                            pitch_track=self._pitch_track_of(run[i:j + 1]),
+                                            src_t=src_t, src_dur=0.28, src_track=lid,
+                                            src_pts=[p["id"] for p in run[i:j + 1]]))
+                        i = j; consumed_last = (j == n - 1)
+                    else:                                      # held: a bar lasting until the next point
+                        beat, src_t = self._beat_of(a, a["t"], beat_len)
+                        length = max(0.05, (float(run[i + 1]["t"]) - float(a["t"])) * dur / beat_len)
+                        events.append(Event(lane_id=lid, beat=beat, vel=max(0.2, min(1.0, a["v"])),
+                                            pitch=int(a.get("midi", DEF_MIDI)), length=length,
+                                            src_t=src_t, src_dur=0.28, src_track=lid, src_pts=[a["id"]]))
+                        i += 1
+                if i == n - 1 and not consumed_last:           # the last note rings out naturally
+                    events.append(_hit(run[n - 1]))
         return (lane, events) if events else (None, [])
 
     def build(self):

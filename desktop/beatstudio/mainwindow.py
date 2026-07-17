@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
         self.toolbar.record_master.connect(self._toggle_master_record)
         self.toolbar.open_separator.connect(self._open_separator)
         self.toolbar.layout_toggled.connect(self._toggle_layout)
+        self.toolbar.fullscreen_toggled.connect(self._toggle_fullscreen)
         self.toolbar.undo.connect(self._undo)
         self.toolbar.redo.connect(self._redo)
         self.toolbar.clear_all.connect(self._clear_beats_confirm)
@@ -173,6 +174,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Z"), self, activated=self._undo)
         QShortcut(QKeySequence("Ctrl+Shift+Z"), self, activated=self._redo)
         QShortcut(QKeySequence("Ctrl+Y"), self, activated=self._redo)
+        QShortcut(QKeySequence(Qt.Key_F11), self, activated=self._toggle_fullscreen)
 
         # transport + audio
         self.engine = AudioEngine()
@@ -546,8 +548,25 @@ class MainWindow(QMainWindow):
                 self._set_title("Separator open — record a master take to fill it")
         self._show_board()
 
+    # ---- global full screen (both windows) ----
+    def _toggle_fullscreen(self):
+        on = not self.isFullScreen()
+        self.showFullScreen() if on else self.showNormal()
+        # In two-screen mode the separator is its OWN window — full-screen it too, so the button
+        # really is global (one-screen mode has only this window, so nothing else to flip).
+        b = self._board
+        if not self._one_screen and b is not None and b.isVisible():
+            if bool(getattr(b, "_is_full", False)) != on:
+                b._toggle_full()
+        self.toolbar.set_fullscreen(on)
+
     # ---- one-screen (docked) vs two-screen (separate windows) ----
     def _toggle_layout(self):
+        # If the separator was CLOSED while in two-screen mode, the screens button just REOPENS it
+        # (instead of flipping the layout) — so a stray Close is always recoverable.
+        if (not self._one_screen and self._board is not None and not self._board.isVisible()):
+            self._show_board()
+            return
         self._one_screen = not self._one_screen
         self.toolbar.set_layout_mode(self._one_screen)
         if self._one_screen:

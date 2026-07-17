@@ -31,6 +31,7 @@ def to_dict(p: Project) -> dict:
                     "length": e.length, "pitch": e.pitch, "tune": e.tune, "eq": e.eq,
                     "src_t": e.src_t, "src_dur": e.src_dur,
                     "morph": e.morph, "morph_end": e.morph_end, "env": e.env,
+                    "pitch_track": e.pitch_track,
                     "src_track": e.src_track, "src_pts": e.src_pts} for e in p.events],
     }
 
@@ -67,6 +68,7 @@ def from_dict(d: dict) -> Project:
                              eq=e.get("eq") or {"low": 0, "mid": 0, "high": 0},
                              src_t=e.get("src_t", e.get("srcT")), src_dur=e.get("src_dur", e.get("srcDur")),
                              morph=e.get("morph"), morph_end=e.get("morph_end"), env=e.get("env"),
+                             pitch_track=e.get("pitch_track"),
                              src_track=e.get("src_track"), src_pts=e.get("src_pts")))
     return p
 

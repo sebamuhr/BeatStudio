@@ -14,9 +14,37 @@ _FALLBACK = ["kick", "snare", "hat", "clap", "tomM", "rim", "cowbell", "shaker",
 _DRUM_REF = 60   # a drum note at this MIDI plays NATURAL; above/below resamples it up/down (tom up/down)
 
 
+def _pitch_track_hz(e, spb, tune):
+    """Per-sample frequency array for a TIED note (NOTES-view line). `pitch_track` is a coarse MIDI
+    curve (held = repeated steps, glide = a slide); resample it to the note's sample length."""
+    pt = np.asarray(e.pitch_track, np.float32).ravel()
+    if len(pt) < 1:
+        return None
+    n = max(2, int((e.length or 0) * spb * SR))
+    midi = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(pt)), pt) if len(pt) >= 2 \
+        else np.full(n, float(pt[0]), np.float32)
+    return (440.0 * (2.0 ** ((midi + tune - 69.0) / 12.0))).astype(np.float32)
+
+
 def _voice_for(lane, e, spb, li, samples):
     kind = lane.kind
     tune = e.tune or 0
+    # A TIED note (a line in the NOTES view) → ONE sustained voice that GLIDES along the pitch track.
+    # Held segments repeat a step (staircase), glide segments slide — both live in e.pitch_track.
+    if e.pitch_track and kind in ("drum", "hum", "inst", "sample", "synth"):
+        freq = _pitch_track_hz(e, spb, tune)
+        if freq is not None and len(freq) >= 2:
+            bp = getattr(lane, "sound_params", None)
+            snd = lane.sound
+            if kind == "hum":
+                x = synth.hum_voice(snd, freq, params=bp)
+            elif kind == "inst":
+                x = synth.inst_voice(snd, freq, params=bp)
+            else:                                    # drum / sample / synth: filtered-osc glide voice
+                x = synth.glide_voice(snd if kind != "synth" else (snd or "sine"), freq, bp)
+            x = (x * max(0.2, min(1.2, e.vel or 0.85))).astype(np.float32)
+            eq = e.eq or {}
+            return synth.apply_eq(x, eq.get("low", 0), eq.get("mid", 0), eq.get("high", 0))
     if kind == "drum":
         dur = (e.length or 0) * spb
         # a long drawn region → a buzz-ROLL (the "tsssss"); a short one → a single hit

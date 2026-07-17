@@ -65,6 +65,7 @@ class Toolbar(QWidget):
     play = Signal(); stop = Signal(); record_master = Signal()
     open_separator = Signal()
     layout_toggled = Signal()                 # ⊟/⊞ — one-screen (docked) vs two-screen (separate windows)
+    fullscreen_toggled = Signal()             # ⛶ — global full screen (both windows), lives here now
     metronome = Signal(); bpm_changed = Signal(int)
     undo = Signal(); redo = Signal(); clear_all = Signal()
 
@@ -130,17 +131,31 @@ class Toolbar(QWidget):
         # Layout toggle: 1 screen (separator + studio stacked in ONE window) / 2 screens (separate windows).
         self.layout_btn = QPushButton("2 screens"); self.layout_btn.setFixedHeight(54)
         self.layout_btn.setCursor(Qt.PointingHandCursor); self.layout_btn.setFont(theme.sans(12, 600))
-        self.layout_btn.setToolTip("Toggle layout: stack both in one window, or use two separate windows")
+        self.layout_btn.setToolTip("Toggle layout: one window (stacked) or two separate windows. "
+                                   "If the separator was closed, this reopens it.")
         self.layout_btn.setStyleSheet(
             "QPushButton{background:#101016;border:1px solid #2a2a36;border-radius:12px;"
             "color:#d8d8e0;padding:0 16px;}QPushButton:hover{background:#16161e;}")
         self.layout_btn.clicked.connect(self.layout_toggled.emit)
         lay.addWidget(self.layout_btn)
 
+        # Full screen: GLOBAL (was on the board only, so it vanished when the board was closed).
+        self.full_btn = QPushButton("⛶ Full screen"); self.full_btn.setFixedHeight(54)
+        self.full_btn.setCursor(Qt.PointingHandCursor); self.full_btn.setFont(theme.sans(12, 600))
+        self.full_btn.setToolTip("Full screen (F11) — both windows")
+        self.full_btn.setStyleSheet(
+            "QPushButton{background:#101016;border:1px solid #2a2a36;border-radius:12px;"
+            "color:#d8d8e0;padding:0 16px;}QPushButton:hover{background:#16161e;}")
+        self.full_btn.clicked.connect(self.fullscreen_toggled.emit)
+        lay.addWidget(self.full_btn)
+
         self.refresh_info()
 
     def set_layout_mode(self, one_screen: bool):
         self.layout_btn.setText("1 screen" if one_screen else "2 screens")
+
+    def set_fullscreen(self, on: bool):
+        self.full_btn.setText("⛶ Exit full screen" if on else "⛶ Full screen")
 
     def refresh_info(self):
         n = len(self.project.events)

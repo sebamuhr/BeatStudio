@@ -23,6 +23,7 @@ class Event:
     morph: float | None = None       # synth: morph amount at note START (0=base, 1=modulator)
     morph_end: float | None = None   # synth: morph amount at note END (glides across the note)
     env: list | None = None          # synth: the drawn line sampled over the note (0..1) = volume+morph
+    pitch_track: list | None = None  # NOTES tie: per-step MIDI across a sustained note (held=steps, glide=slide)
     src_track: str | None = None     # sync: the Separation-Board track (lane_id) that generated this
     src_pts: list | None = None      # sync: the board anchor id(s) behind it (1 hit / a synth run)
     eq: dict = field(default_factory=lambda: {"low": 0, "mid": 0, "high": 0})

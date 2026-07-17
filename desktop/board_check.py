@@ -264,6 +264,37 @@ assert bd.canvas._hit_take_sel(bd.canvas._take_chk_rect(1).center()) == 1, "volu
 bd.canvas.set_sel_take(1)
 print("TAKE SELECT ok: ticking a soundwave scopes notes/active-track/new-tracks to it")
 
+# NOTES LINE (ties): pitched clicks auto-connect; held = bars, glide = a sliding pitch_track;
+# right-click cuts a line; drums never auto-tie.
+bd.canvas.set_sel_take(0)
+bd.add_track(); ntr = bd.tracks[-1]; ntr["kind"] = "sample"
+bd.canvas.set_active(bd.tracks.index(ntr))
+bd._set_mode("notes"); cvn = bd.canvas
+def _nclick(tf, midi):
+    x = cvn._to_px_t(tf); y = cvn._note_y(midi)
+    cvn.mousePressEvent(E(x, y)); cvn.mouseReleaseEvent(E(x, y)); app.processEvents()
+_nclick(0.15, 60); _nclick(0.45, 64); _nclick(0.75, 67)
+npts = sorted(ntr["points"], key=lambda q: q["t"])
+assert len(npts) == 3 and npts[0]["tie"] and npts[1]["tie"] and not npts[2]["tie"], \
+    "pitched clicks did not auto-tie into a melody line"
+_lane, _evs = bd._lane_events(ntr)
+assert sorted(e.pitch for e in _evs) == [60, 64, 67] and all(e.pitch_track is None for e in _evs), \
+    "held run should be steady piano-roll bars (60,64,67), no glide"
+npts[1]["glide"] = True                                # make the 2nd segment a slide
+_lane, _evs = bd._lane_events(ntr)
+_gl = [e for e in _evs if e.pitch_track]
+assert len(_gl) == 1 and max(_gl[0].pitch_track) - min(_gl[0].pitch_track) >= 2.5, \
+    "glide segment did not become one sliding note"
+axn = cvn._to_px_t((npts[0]["t"] + npts[1]["t"]) / 2); ayn = cvn._note_y(npts[0]["midi"])
+cvn.mousePressEvent(E(axn, ayn, btn=Qt.RightButton)); cvn.mouseReleaseEvent(E(axn, ayn, btn=Qt.RightButton))
+app.processEvents()
+assert not npts[0]["tie"] and len(bd._tied_runs(npts)) == 2, "right-click did not cut the tie"
+bd.add_track(); dtr = bd.tracks[-1]; dtr["kind"] = "drum"; bd.canvas.set_active(bd.tracks.index(dtr))
+_nclick(0.3, 60); _nclick(0.6, 60)
+assert not any(p.get("tie") for p in dtr["points"]), "a drum auto-tied (must stay separate hits)"
+bd._delete_track(dtr); bd._delete_track(ntr); bd._set_mode("volume")
+print("NOTES LINE ok: pitched clicks tie into held bars + glides; right-click cuts; drums stay hits")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):
@@ -352,6 +383,19 @@ assert abs(trf["points"][1]["t"] - t_after0) > 0.01, "a point after the region d
 # a point BEFORE the region keeps its absolute audio time (fraction × length ≈ unchanged)
 assert abs(trf["points"][0]["t"] * N1 - t_before0 * N0) < 0.03 * N0, "a point before the region drifted"
 print(f"FIT ok: region resample shortened the take {N0}->{N1} and remapped drawn points")
+
+# FULLSCREEN (global) + REOPEN: the Studio toolbar drives full screen for both windows, and the
+# screens button reopens a separator that was closed in two-screen mode.
+w._one_screen = False; w._float_board(); app.processEvents()
+w._toggle_fullscreen(); app.processEvents()
+assert w.isFullScreen() and getattr(bd, "_is_full", False), "global full screen did not cover both windows"
+w._toggle_fullscreen(); app.processEvents()
+assert not w.isFullScreen() and not getattr(bd, "_is_full", False), "exit full screen failed"
+bd.hide(); app.processEvents()                       # user closed the separator (two-screen)
+assert not bd.isVisible()
+w._toggle_layout(); app.processEvents()               # screens button → reopens it (no layout flip)
+assert bd.isVisible() and not w._one_screen, "screens button did not reopen the closed separator"
+print("FULLSCREEN ok: global full screen covers both windows; screens button reopens a closed separator")
 
 # LIFECYCLE: closing the Studio closes the separator (float it out first — separate-window path)
 w._float_board(); app.processEvents()
