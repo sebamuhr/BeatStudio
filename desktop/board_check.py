@@ -240,6 +240,30 @@ bd.add_track()
 assert bd.tracks[-1]["take"] == new_tid, "new track did not bind to the secondary take row"
 print("RECORD SECONDARY ok: new take row, own colour, new tracks draw over it")
 
+# TAKE SELECT: tick a soundwave → everything (notes view, new tracks, active track) scopes to IT
+sec_track = bd.tracks[-1]                                  # the track we just bound to take 1
+assert bd.canvas.sel_take == 1 and bd._active_take == new_tid, "overdub should select the new wave"
+bd.canvas.set_sel_take(0)                                  # tick the MAIN wave
+assert bd.canvas._active_band() == 0, "selecting take 0 did not move the working row"
+assert bd._active_take == bd.takes[0]["id"], "board _active_take did not follow the selection"
+act = bd.canvas.active
+assert 0 <= act < len(bd.tracks) and bd.tracks[act]["take"] == bd.takes[0]["id"], \
+    "active track must belong to the selected wave"
+# NOTES mode must show the SELECTED wave's pitch, not always the Main one (the reported bug)
+bd._set_mode("notes")
+assert bd.canvas._active_band() == 0, "notes view ignored the selected wave"
+bd.canvas.set_sel_take(1)
+assert bd.canvas._active_band() == 1 and bd.canvas.active == bd.tracks.index(sec_track), \
+    "selecting the secondary wave did not scope the notes view + active track to it"
+# a new track binds to the SELECTED wave, and the wave's checkbox is clickable
+bd.add_track(); assert bd.tracks[-1]["take"] == new_tid, "new track ignored the selected wave"
+bd._delete_track(bd.tracks[-1])
+assert bd.canvas._hit_take_sel(bd.canvas._take_chip_rect(0).center()) == 0, "notes take chip not hittable"
+bd._set_mode("volume")
+assert bd.canvas._hit_take_sel(bd.canvas._take_chk_rect(1).center()) == 1, "volume take checkbox not hittable"
+bd.canvas.set_sel_take(1)
+print("TAKE SELECT ok: ticking a soundwave scopes notes/active-track/new-tracks to it")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

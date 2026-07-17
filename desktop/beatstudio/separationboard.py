@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QWidget, QComboBox, QScrollArea, QFrame, QLineEdit, QSizePolicy,
-                               QSpinBox, QSlider, QToolTip)
+                               QSpinBox, QSlider, QToolTip, QGraphicsOpacityEffect)
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QElapsedTimer, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 
@@ -51,6 +51,7 @@ DEF_MIDI = 60                    # default pitch (C4 = natural) for a point unti
 PIANO_MIN, PIANO_MAX = 21, 108   # full piano (A0..C8) — scroll the NOTES view anywhere in here
 NOTE_SPAN = 30                   # semitones visible at once in NOTES mode (scroll for the rest)
 NOTE_SNAP_DIV = 48               # notes snap to 1/48 of a beat (super fine — accurate placement)
+TAKE_BAR = 24                    # height of the take-picker strip at the top of NOTES mode
 # each take (main + overdubs) gets its own row + waveform colour
 TAKE_HEX = ["#ff6b6b", "#c0a8ff", "#5cd6c0", "#ffd24d", "#ff8c5c", "#6ecbff"]
 
@@ -70,6 +71,7 @@ class CurveCanvas(QWidget):
     fit_applied = Signal(float, float, float)   # Fit tool: (a_frac, b0_frac, new_b_frac) → resample
     key_pressed = Signal(int)     # a piano key in the notes gutter was clicked → audition this MIDI note
     delete_take = Signal(int)     # the ✕ on a take (soundwave) was clicked → remove it + everything on it
+    take_selected = Signal(int)   # a soundwave's checkbox was ticked → scope everything to that take
 
     def __init__(self, buf, sr, bpm, tracks, parent=None):
         super().__init__(parent)
@@ -98,6 +100,9 @@ class CurveCanvas(QWidget):
         self.note_lo, self.note_hi = 36, 84   # visible pitch range in notes mode (C2..C6)
         self._note_drag = None     # (track_idx, note_idx) while dragging a note in the piano-roll
         self.takes = []
+        # WHICH soundwave you are working on. Authoritative: the notes view, point placement and new
+        # tracks all scope to it, and the active track is always one of THIS take's tracks.
+        self.sel_take = 0
         self.set_takes([{"id": "T0", "buf": buf, "color": take_color(0), "name": "Main"}])
         self.setMinimumHeight(340)
         self.setMouseTracking(True)
@@ -116,6 +121,7 @@ class CurveCanvas(QWidget):
                                "pitch": self._ribbon_for(b),
                                "peaks": self._peaks_over(b, 0.0, 1.0, 1400)})
         self.buf = self.takes[0]["buf"]      # the MAIN take drives tempo/duration
+        self.sel_take = max(0, min(self.sel_take, len(self.takes) - 1))
         self.update()
 
     def _ribbon_for(self, buf):
@@ -159,9 +165,9 @@ class CurveCanvas(QWidget):
         return 0
 
     def _active_band(self):
-        if 0 <= self.active < len(self.tracks):
-            return self._track_band(self.tracks[self.active])
-        return 0
+        """The take row you're working on = the SELECTED soundwave (not a guess from the active
+        track, which used to fall back to take 0 whenever no track was picked)."""
+        return max(0, min(self.sel_take, len(self.takes) - 1))
 
     def _band(self, i):
         """Vertical layout for take-row i → (top, height, baseline-y, usable-height). The baseline
@@ -176,6 +182,51 @@ class CurveCanvas(QWidget):
         """The ✕ (delete-soundwave) button rect at the top-right of take-row i (volume mode)."""
         top, _, _, _ = self._band(i); _, x1 = self._xspan()
         return QRectF(x1 - 24, top + 5, 17, 17)
+
+    def _take_bar(self):
+        """The NOTES-mode take-picker strip: shown only when there's more than one soundwave."""
+        return TAKE_BAR if len(self.takes) > 1 else 0.0
+
+    def _take_chk_rect(self, i):
+        """The soundwave checkbox, left of the take's name (volume mode)."""
+        top, _, _, _ = self._band(i); x0, _ = self._xspan()
+        return QRectF(x0 + 6, top + 3, 13, 13)
+
+    def _take_chip_rect(self, i):
+        """A take's chip in the NOTES-mode picker strip (checkbox + name), left to right."""
+        x0, _ = self._xspan()
+        w = 104.0
+        return QRectF(x0 + 6 + i * (w + 6), 5, w, TAKE_BAR - 8)
+
+    def _band_at(self, y):
+        """Which take row the cursor is over (volume mode), or None."""
+        for i in range(len(self.takes)):
+            top, bh, _, _ = self._band(i)
+            if top <= y <= top + bh:
+                return i
+        return None
+
+    def _first_track_on(self, band):
+        """The first track bound to take-row `band`, or None — so we never draw on another wave."""
+        for i, tr in enumerate(self.tracks):
+            if self._track_band(tr) == band:
+                return i
+        return None
+
+    def _hit_take_sel(self, pos):
+        """Which soundwave's selector was clicked (index), or None."""
+        if self.mode == "notes":
+            if self._take_bar():
+                for i in range(len(self.takes)):
+                    if self._take_chip_rect(i).contains(pos):
+                        return i
+            return None
+        for i in range(len(self.takes)):
+            # the whole name strip is clickable, not just the 13px box (easier to hit)
+            if self._take_chk_rect(i).united(QRectF(self._take_chk_rect(i).right(),
+                                                    self._take_chk_rect(i).top(), 130, 13)).contains(pos):
+                return i
+        return None
 
     def _notes_del_rect(self):
         """The ✕ for the take shown in notes mode (deletes the active take)."""
@@ -198,8 +249,34 @@ class CurveCanvas(QWidget):
         p.drawLine(QPointF(r.left() + m, r.top() + m), QPointF(r.right() - m, r.bottom() - m))
         p.drawLine(QPointF(r.right() - m, r.top() + m), QPointF(r.left() + m, r.bottom() - m))
 
+    def _draw_take_chk(self, p, r, col, on):
+        """A small checkbox in the take's own colour — ticked = this is the soundwave you're editing."""
+        p.setBrush(QBrush(col if on else QColor(20, 20, 28, 220)))
+        p.setPen(QPen(col if on else QColor(255, 255, 255, 55), 1.3))
+        p.drawRoundedRect(r, 3, 3)
+        if on:
+            p.setPen(QPen(QColor("#12121a"), 1.9))
+            p.drawLine(QPointF(r.left() + 3, r.center().y()), QPointF(r.center().x() - 0.5, r.bottom() - 3.2))
+            p.drawLine(QPointF(r.center().x() - 0.5, r.bottom() - 3.2), QPointF(r.right() - 2.8, r.top() + 3.2))
+
+    def set_sel_take(self, i):
+        """Pick the soundwave to work on. Everything (notes view, new points, new tracks) follows it."""
+        i = max(0, min(int(i), len(self.takes) - 1))
+        if i == self.sel_take:
+            return
+        self.sel_take = i
+        if self.mode == "notes":
+            self._fit_note_range()          # re-centre the piano on THIS take's pitches
+        self.take_selected.emit(i); self.update()
+
     def set_active(self, i):
-        self.active = i; self.active_changed.emit(i); self.update()
+        # Picking a track also moves you to ITS soundwave, so the two can never disagree. Assign
+        # `active` FIRST: set_sel_take emits, and the board reconciles against `active` — a stale
+        # value there would bounce the selection to another track.
+        self.active = i
+        if 0 <= i < len(self.tracks):
+            self.set_sel_take(self._track_band(self.tracks[i]))
+        self.active_changed.emit(i); self.update()
 
     def _select_point(self, pid):
         self.sel_pts = {pid} if pid else set()
@@ -283,7 +360,7 @@ class CurveCanvas(QWidget):
             self.note_lo, self.note_hi = lo, lo + span; self.update()
 
     def _notes_plot(self):
-        return 6.0, self.height() - MM_H - 18
+        return 6.0 + self._take_bar(), self.height() - MM_H - 18
 
     def _note_y(self, m):
         y0, y1 = self._notes_plot()
@@ -345,8 +422,11 @@ class CurveCanvas(QWidget):
         for i, tk in enumerate(self.takes):
             top, bh, cy, half = self._band(i)
             base = tk["color"]
-            if i == active_band:
-                p.fillRect(QRectF(0, top, self.width(), bh), QColor(255, 255, 255, 5))
+            if i == active_band:      # the soundwave you're editing: tinted in its own colour + a side bar
+                p.fillRect(QRectF(0, top, self.width(), bh), QColor(base.red(), base.green(), base.blue(), 15))
+                p.fillRect(QRectF(0, top, 3, bh), base)
+                p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 60), 1)); p.setBrush(Qt.NoBrush)
+                p.drawLine(int(x0), int(top), int(x1), int(top))
             for lvl in range(0, 11, 5):            # compact volume scale per row
                 yv = cy - (lvl / 10.0) * half
                 p.setPen(QPen(QColor("#4a4a56"), 1))
@@ -374,8 +454,12 @@ class CurveCanvas(QWidget):
                     for k in range(ncols):
                         x = x0 + (k / (ncols - 1)) * (x1 - x0); a = float(vpeaks[k]) * half
                         p.drawLine(QPointF(x, cy), QPointF(x, cy - a))
-            p.setFont(theme.sans(9, 600)); p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 210), 1))
-            p.drawText(QRectF(x0 + 6, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
+            # checkbox + name: tick a soundwave to make it the one you're editing
+            sel = (i == active_band)
+            self._draw_take_chk(p, self._take_chk_rect(i), base, sel)
+            p.setFont(theme.sans(9, 700 if sel else 600))
+            p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 235 if sel else 150), 1))
+            p.drawText(QRectF(x0 + 24, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
             self._draw_del_x(p, self._take_del_rect(i))    # ✕ delete this whole soundwave (+ its tracks)
 
         # bar + beat lines span every row (shifted by the grid offset)
@@ -553,9 +637,10 @@ class CurveCanvas(QWidget):
                     a = 55 if (k % 16 == 0) else (30 if (k % 4 == 0) else 12)
                     p.setPen(QPen(QColor(255, 255, 255, a), 1)); p.drawLine(int(x), int(y0), int(x), int(y1))
                 k += 1
-        # placed note points (active track bright, others faint) — a short bar on the lane + a dot
+        # placed note points (active track bright, others faint) — a short bar on the lane + a dot.
+        # ONLY this soundwave's tracks: another take's notes belong to another wave, not this piano-roll.
         for ti, tr in enumerate(self.tracks):
-            if not tr.get("visible", True):
+            if not tr.get("visible", True) or self._track_band(tr) != ab:
                 continue
             active = (ti == self.active)
             for nt in (tr.get("points") or []):
@@ -587,11 +672,28 @@ class CurveCanvas(QWidget):
             p.setPen(QPen(theme.REC, 2)); p.drawLine(QPointF(x, y0), QPointF(x, y1))
         if self.takes:
             self._draw_del_x(p, self._notes_del_rect())    # ✕ delete this soundwave (+ its tracks)
+        # take picker: which soundwave's notes am I looking at? (only worth showing with >1 wave)
+        if self._take_bar():
+            for i, tk in enumerate(self.takes):
+                r = self._take_chip_rect(i)
+                if r.right() > x1:
+                    break
+                sel = (i == ab); col = tk["color"]
+                p.setBrush(QBrush(QColor(col.red(), col.green(), col.blue(), 30) if sel else QColor(18, 18, 26, 200)))
+                p.setPen(QPen(col if sel else QColor(255, 255, 255, 30), 1.4 if sel else 1))
+                p.drawRoundedRect(r, 5, 5)
+                cr = QRectF(r.left() + 6, r.center().y() - 6.5, 13, 13)
+                self._draw_take_chk(p, cr, col, sel)
+                p.setFont(theme.sans(9, 700 if sel else 600))
+                p.setPen(QPen(QColor(col.red(), col.green(), col.blue(), 235 if sel else 150), 1))
+                p.drawText(QRectF(cr.right() + 5, r.top(), r.width() - 26, r.height()),
+                           Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
         # hint / hover
-        if not self.tracks:
+        if self._first_track_on(ab) is None:
+            name = self.takes[ab]["name"] if self.takes else "this soundwave"
             p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(12))
             p.drawText(QRectF(x0, y0, x1 - x0, 24), Qt.AlignHCenter | Qt.AlignTop,
-                       "Add a track → then click the coloured wave to place notes")
+                       f"Add a track → it lands on “{name}” → then click the wave to place notes")
         elif not (self.tracks[max(0, self.active)].get("points")):
             p.setPen(QPen(QColor("#5a5a6a"), 1)); p.setFont(theme.sans(12))
             p.drawText(QRectF(x0, y0, x1 - x0, 24), Qt.AlignHCenter | Qt.AlignTop,
@@ -657,7 +759,7 @@ class CurveCanvas(QWidget):
         ti = self.active
         if not (0 <= ti < len(self.tracks)) or not self.tracks[ti]["visible"]:
             return None
-        bi = self._active_band()
+        bi = self._track_band(self.tracks[ti])     # hit-test in the row it's PAINTED in
         best, bd = None, HIT_R ** 2
         for pi, pt in enumerate(self.tracks[ti]["points"]):
             if not (self.view0 - 1e-3 <= pt["t"] <= self.view1 + 1e-3):
@@ -670,7 +772,7 @@ class CurveCanvas(QWidget):
     def _hit_handle(self, pos):
         if not (0 <= self.active < len(self.tracks)):
             return None
-        bi = self._active_band()
+        bi = self._track_band(self.tracks[self.active])     # same row it's painted in
         for pi, pt in enumerate(self.tracks[self.active]["points"]):
             if not (pt["hx"] or pt["hy"]):
                 continue
@@ -748,6 +850,9 @@ class CurveCanvas(QWidget):
             di = self._hit_take_del(pos)
             if di is not None:
                 self.delete_take.emit(di); return
+            si = self._hit_take_sel(pos)          # ticked a soundwave → work on THAT one
+            if si is not None:
+                self.set_sel_take(si); return
         if self._mm_rect().contains(pos):
             if ev.button() == Qt.LeftButton:
                 self._pan_mm = True; r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update()
@@ -779,6 +884,9 @@ class CurveCanvas(QWidget):
             self._drag = ("anchor", h[0], h[1]); self.set_active(h[0])
             self._select_point(self.tracks[h[0]]["points"][h[1]].get("id"))    # link to the Studio beat
             self.update(); return
+        bi = self._band_at(pos.y())          # clicked another soundwave's row → go there, don't
+        if bi is not None and bi != self._active_band():   # silently drop the point on THIS one
+            self.set_sel_take(bi); return
         if not (0 <= self.active < len(self.tracks)):
             return
         t, v = self._from_px(pos.x(), pos.y(), self._active_band()); pts = self.tracks[self.active]["points"]
@@ -817,8 +925,12 @@ class CurveCanvas(QWidget):
     def _notes_press(self, ev, pos):
         if not self.tracks:
             return
-        if not (0 <= self.active < len(self.tracks)):
-            self.set_active(0)                             # no track picked yet → draw on the first
+        ab = self._active_band()                           # notes always belong to the SELECTED wave
+        if not (0 <= self.active < len(self.tracks)) or self._track_band(self.tracks[self.active]) != ab:
+            i = self._first_track_on(ab)                   # no track picked (or one from another wave)
+            if i is None:
+                return                                     # this wave has no track yet → nothing to draw on
+            self.set_active(i)
         x0, _ = self._xspan()
         if pos.x() < x0:                                   # clicked a piano KEY → audition the note
             if ev.button() == Qt.LeftButton:
@@ -999,6 +1111,8 @@ class TrackRow(QFrame):
         self.track = track; self.items = items; self._play_widgets = []; self._sound_btns = {}
         track.setdefault("params", default_params())
         track.setdefault("params_b", default_params())
+        self._active = False
+        self._on_take = True        # False = belongs to a soundwave you're not editing → dimmed
         self._refresh_style(active=False)
         lay = QVBoxLayout(self); lay.setContentsMargins(10, 8, 10, 8); lay.setSpacing(6)
 
@@ -1137,11 +1251,28 @@ class TrackRow(QFrame):
         return False
 
     def _refresh_style(self, active):
+        self._active = active
         c = self.track["color"].name()
-        self.setStyleSheet(f"TrackRow{{background:#13131b;border:{'2px solid '+c if active else '1px solid #2a2a36'};border-radius:10px;}}")
+        if self._on_take:
+            bg, bd = "#13131b", ("2px solid " + c) if active else "1px solid #2a2a36"
+        else:                      # another soundwave's track — visibly backgrounded
+            bg, bd = "#0e0e14", "1px solid #1c1c24"
+        self.setStyleSheet(f"TrackRow{{background:{bg};border:{bd};border-radius:10px;}}")
 
     def set_active(self, on):
         self._refresh_style(on)
+
+    def set_on_take(self, on):
+        """Is this track on the soundwave currently selected? Tracks of another wave fade back, so
+        the list reads as 'these are the tracks on the wave I'm editing'."""
+        if on == self._on_take:
+            return
+        self._on_take = bool(on)
+        if self._on_take:
+            self.setGraphicsEffect(None)              # drops (deletes) the old effect
+        else:
+            fx = QGraphicsOpacityEffect(self); fx.setOpacity(0.42); self.setGraphicsEffect(fx)
+        self._refresh_style(self._active)
 
     def mousePressEvent(self, ev):
         self.activated.emit(self.track); super().mousePressEvent(ev)
@@ -1299,9 +1430,9 @@ class SeparationBoard(QWidget):
         self.canvas.fit_applied.connect(self._apply_fit)
         self.canvas.key_pressed.connect(self._on_key_pressed)
         self.canvas.delete_take.connect(self._delete_take)
+        self.canvas.take_selected.connect(self._on_take_selected)
         self._set_tool("pen")
         self._set_mode("volume")
-        mid.addWidget(self.canvas, 1)
 
         side = QVBoxLayout(); side.setSpacing(8)
         add = QPushButton("＋ Add track"); add.setCursor(Qt.PointingHandCursor); add.setFixedHeight(38); add.clicked.connect(self.add_track)
@@ -1312,7 +1443,8 @@ class SeparationBoard(QWidget):
         self._list.setSpacing(8); self._list.setContentsMargins(0, 0, 4, 0); self._list.addStretch(1)
         scroll.setWidget(self._list_host); side.addWidget(scroll, 1)
         sw = QWidget(); sw.setLayout(side); sw.setFixedWidth(300)
-        mid.addWidget(sw)
+        mid.addWidget(sw)                 # track list on the LEFT — every menu in the app is left-side
+        mid.addWidget(self.canvas, 1)
         root.addLayout(mid, 1)
 
         btns = QHBoxLayout()
@@ -1433,6 +1565,7 @@ class SeparationBoard(QWidget):
         self._active_take = tid
         v0, v1 = self.canvas.view0, self.canvas.view1        # keep the current zoom
         self.canvas.set_takes(self.takes)
+        self._sync_sel_take()                                # a fresh overdub = the wave you're on now
         self.canvas.view0, self.canvas.view1 = v0, v1; self.canvas.update()
         return tid
 
@@ -1459,6 +1592,7 @@ class SeparationBoard(QWidget):
         self._active_take = self.takes[0]["id"]
         self.canvas.bpm = self.bpm; self.canvas.set_active(-1)
         self.canvas.set_takes(self.takes); self.canvas.view0, self.canvas.view1 = 0.0, 1.0
+        self._sync_sel_take()
         self._update_zoom_label(); self._refresh()
         self.tracks_changed.emit("")               # structural: all auto lanes cleared
 
@@ -1497,6 +1631,7 @@ class SeparationBoard(QWidget):
             self._add_row(tr)
         self.canvas.set_takes(self.takes)
         self.canvas.set_active(min(self.canvas.active, len(self.tracks) - 1) if self.tracks else -1)
+        self._sync_sel_take()                              # restore the soundwave you were editing
         self.bpm_box.blockSignals(True); self.bpm_box.setValue(int(self.bpm)); self.bpm_box.blockSignals(False)
         self._update_zoom_label(); self._refresh()
 
@@ -1520,7 +1655,7 @@ class SeparationBoard(QWidget):
               "fx": default_fx()}
         self.tracks.append(tr)
         self._add_row(tr)
-        self._activate_track(tr); self._refresh()
+        self._activate_track(tr); self._sel_take_rows(); self._refresh()
         self.tracks_changed.emit(tr["lane_id"])
 
     def _preview_sound(self, preset, params, btn):
@@ -1544,6 +1679,40 @@ class SeparationBoard(QWidget):
         for i, row in enumerate(self._rows):
             row.set_active(i == idx)
 
+    def _on_take_selected(self, ti):
+        """A soundwave was ticked on the canvas → new tracks bind to it, and the active track
+        becomes one of ITS tracks (so drawing/notes can never land on a wave you're not seeing)."""
+        if 0 <= ti < len(self.takes):
+            self._active_take = self.takes[ti]["id"]
+            self._reconcile_active()
+
+    def _sync_sel_take(self):
+        """Point the canvas at `_active_take` (the board owns the take id, the canvas an index).
+        Set directly — no signal — then reconcile, so restore/delete paths can't re-enter."""
+        ids = [t["id"] for t in self.takes]
+        if self._active_take not in ids:
+            self._active_take = ids[0] if ids else None
+        self.canvas.sel_take = ids.index(self._active_take) if self._active_take in ids else 0
+        self._reconcile_active()
+
+    def _reconcile_active(self):
+        """Keep the invariant: the active track always belongs to the SELECTED soundwave."""
+        ti = self.canvas._active_band(); cur = self.canvas.active
+        if not (0 <= cur < len(self.tracks)) or self.canvas._track_band(self.tracks[cur]) != ti:
+            i = self.canvas._first_track_on(ti)
+            # set_active re-enters set_sel_take with the SAME index → no emit, no loop
+            self.canvas.set_active(i if i is not None else -1)
+        for k, row in enumerate(self._rows):
+            row.set_active(k == self.canvas.active)
+        self._sel_take_rows()
+
+    def _sel_take_rows(self):
+        """Dim the track rows that belong to another soundwave — you can see at a glance which
+        tracks the selected wave owns."""
+        tid = self._active_take
+        for tr, row in zip(self.tracks, self._rows):
+            row.set_on_take(tr.get("take") == tid)
+
     def _on_canvas_edited(self, idx):
         if 0 <= idx < len(self.tracks):
             self.tracks_changed.emit(self.tracks[idx].get("lane_id", ""))
@@ -1555,6 +1724,7 @@ class SeparationBoard(QWidget):
         self.canvas.active = min(self.canvas.active, len(self.tracks) - 1)
         for i, r in enumerate(self._rows):
             r._refresh_style(i == self.canvas.active)
+        self._sel_take_rows()
         self.canvas.active_changed.emit(self.canvas.active); self._refresh()
         self.tracks_changed.emit(lane_id)              # tell the Studio to drop this lane
 
@@ -1589,6 +1759,7 @@ class SeparationBoard(QWidget):
         self.canvas.active = min(self.canvas.active, len(self.tracks) - 1)
         self.canvas.set_takes(self.takes)
         self.canvas.view0, self.canvas.view1 = v0, v1
+        self._sync_sel_take()                              # deleted wave → fall back to a live one
         self.canvas.active_changed.emit(self.canvas.active); self._refresh()
         self.take_audio_changed.emit()                     # the main take audio may have changed
         self.tracks_changed.emit("")                       # structural resync (Studio drops the lanes)

@@ -1,15 +1,15 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.32.2** (shown in the window title bar as
-`Beat Studio · v0.32.2`).
+continuing in a new chat.** Current version: **v0.33.0** (shown in the window title bar as
+`Beat Studio · v0.33.0`).
 
 ## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
 
 ### ▶▶ START HERE (next chat: "please continue the progress.md file")
-Items 1–2 are DONE & pushed (v0.32.2). The next three items are BIG and each needs a decision from the
-user BEFORE building (rushing them is what hurts stability). When resuming, **ask the user these open
-questions first, then build** — don't guess:
+Items 1–2 are DONE & pushed (v0.32.2); items 6–7 landed in v0.33.0. The next three items are BIG and each
+needs a decision from the user BEFORE building (rushing them is what hurts stability). When resuming,
+**ask the user these open questions first, then build** — don't guess:
 
 - **#3 Notes line — what does a line segment between two note points MEAN?** (pick one, or "both via a handle")
   - *Pitch glide (portamento):* the note slides from the first point's pitch to the next — siren-like. Best for vocal melodies.
@@ -42,6 +42,47 @@ wire through the shared point/lane/take model + `tracks_changed`/`take_audio_cha
    with many more than today's ~15. NEEDS CONTENT DECISIONS (see START HERE) + engine work.
 5. [ ] **Unify the navigator/zoom** — Studio minimap+zoom pill and the board navigator should behave the
    same; user prefers the box-drag style (image #10). NEEDS the two current implementations compared.
+6. [x] **Select WHICH soundwave you're editing** (v0.33.0) — checkbox per take; notes/points/new tracks
+   scope to it. See below.
+7. [x] **Board track list moved to the LEFT** (v0.33.0) — every menu in the app is now left-side.
+
+## v0.33.0 — pick the soundwave you're working on (checkbox per take) · track list moved left
+User: recording a secondary gave two stacked waves with no way to say "I'm editing THIS one" — clicking
+**Notes** always showed the Main wave's pitches, so a secondary's melody was unreachable.
+- **Root cause:** `_active_band()` (the "row I'm working on") was *derived* from the ACTIVE TRACK's take
+  binding and **fell back to take 0 whenever no track was picked** — so Notes drew Main's pitch no matter
+  which wave you meant. There was no way to express the selection at all: `_active_take` (board) only
+  decided which take a NEW track binds to, and nothing showed it.
+- **Now `CurveCanvas.sel_take` is authoritative** and `_active_band()` just returns it. A **checkbox +
+  name** sits at the left of each take row (volume mode) and, when there's more than one wave, as a row of
+  **chips in a strip at the top of the piano-roll** (`TAKE_BAR=24`, `_notes_plot()` reserves it). The
+  selected wave is tinted in its own colour with a coloured side bar; `set_sel_take` re-centres the piano
+  on that take's pitches (`_fit_note_range`).
+- **Scoping (the actual ask):** the Notes view draws the SELECTED take's pitch fill AND only that take's
+  tracks' note points (it used to draw every track's notes onto whatever roll was open); `_notes_press`
+  picks the first track **on this wave** (was `set_active(0)` = possibly another wave's track); new tracks
+  bind to it (`_active_take`); clicking another wave's row in Volume **selects that wave** instead of
+  silently dropping the point on the one you were on.
+- **INVARIANT (stability rule):** the active track always belongs to the selected wave, and the two can't
+  disagree — `set_active` sets `sel_take` from the track's band, `_on_take_selected`/`_sync_sel_take` →
+  `_reconcile_active()` picks a track on the newly selected wave (or -1). `set_active` assigns `active`
+  BEFORE calling `set_sel_take`, because the board reconciles against `active` and a stale value there
+  bounced the selection to another track. `_sync_sel_take` sets the index WITHOUT the signal, so
+  restore/delete/add_take paths can't re-enter. `_hit`/`_hit_handle` now hit-test in the track's OWN band
+  (`_track_band`) instead of `_active_band()`, so hit-testing can't diverge from painting.
+- Track rows for another wave **fade back** (`TrackRow.set_on_take` → `QGraphicsOpacityEffect` 0.42), so
+  the list reads as "the tracks on the wave I'm editing".
+- Round-trips through undo/save: `_active_take` was already in `snapshot()`; `restore`/`set_take`/
+  `add_take`/`_delete_take` all call `_sync_sel_take()`.
+- **Board track list + "＋ Add track" moved to the LEFT** of the canvas (was right) — every menu in the app
+  is left-side now (user: consistency).
+- Verified headless: new `board_check` **TAKE SELECT** check (ticking a wave scopes the notes view, the
+  active track and new tracks to it; both checkboxes hit-test) + all 21 prior checks green. Screenshots
+  `scratchpad/take_volume.png` (checkbox + tinted row, left sidebar) and `scratchpad/take_notes.png`
+  (Notes shows *Secondary 1's* sung A3→C4→E4→D4, not Main's).
+- STILL OPEN (user's wording "then they all play together but I should be able to isolate them"): all
+  takes' tracks already render together, and per-lane **Solo/Mute** already exist in the Studio header —
+  confirm whether "isolate" meant that (audio) or just the editing scope built here (visual).
 
 ## v0.32.2 — finer notes grid + removed the Separator button
 - **Notes snap is now super-fine:** `_snap_t` uses `NOTE_SNAP_DIV=48` (1/48 of a beat) instead of the
