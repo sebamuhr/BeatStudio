@@ -7,9 +7,16 @@ continuing in a new chat.** Current version: **v0.33.0** (shown in the window ti
 ## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
 
 ### ▶▶ START HERE (next chat: "please continue the progress.md file")
-Items 1–2 are DONE & pushed (v0.32.2); items 6–7 landed in v0.33.0. The next three items are BIG and each
-needs a decision from the user BEFORE building (rushing them is what hurts stability). When resuming,
-**ask the user these open questions first, then build** — don't guess:
+Items 1–2 are DONE & pushed (v0.32.2); take-select + left sidebar landed in v0.33.0. The remaining big
+items (#3 notes line, #4 instruments, #5 navigator) PLUS per-soundwave controls and a global full-screen
+fix are now spec'd in a detailed, decision-locked plan:
+**→ `PLAN-v0.34-notes-instruments-navigator.md` (read it first, then build in its BUILD ORDER).**
+The design Q&A is already resolved there (notes line = click-straight/hold-glide, pitched-only auto-connect,
+line=sustain/no-line=natural length; Hum = synthesized formant voices; navigator = copy the board's to the
+Studio). The only thing still needing a user thumbs-up before building #4 is the concrete content lists
+(which hums / synth presets / instrument categories) — propose them, get approval, then build.
+
+Older framing (superseded by the plan above, kept for context):
 
 - **#3 Notes line — what does a line segment between two note points MEAN?** (pick one, or "both via a handle")
   - *Pitch glide (portamento):* the note slides from the first point's pitch to the next — siren-like. Best for vocal melodies.
