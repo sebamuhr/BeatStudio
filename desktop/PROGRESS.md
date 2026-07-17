@@ -5,6 +5,24 @@ continuing in a new chat.** Current version: **v0.32.2** (shown in the window ti
 `Beat Studio · v0.32.2`).
 
 ## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
+
+### ▶▶ START HERE (next chat: "please continue the progress.md file")
+Items 1–2 are DONE & pushed (v0.32.2). The next three items are BIG and each needs a decision from the
+user BEFORE building (rushing them is what hurts stability). When resuming, **ask the user these open
+questions first, then build** — don't guess:
+
+- **#3 Notes line — what does a line segment between two note points MEAN?** (pick one, or "both via a handle")
+  - *Pitch glide (portamento):* the note slides from the first point's pitch to the next — siren-like. Best for vocal melodies.
+  - *Held note (step):* each point holds its pitch until the next point, then jumps — classic piano-roll bars.
+  - *Both:* straight = glide, drag a handle = curve/hold — mirrors how the volume line already works (click=straight, drag=curve).
+- **#4 Instrument restructure — content decisions needed:** which **10+ hums**, which **10+ synth presets**,
+  and which **instrument categories** (user said "drum, strings, winds, etc… please check for more those
+  are just examples"). Decide: propose a full list for the user to approve, or have the user dictate it?
+- **#5 Navigator unify:** confirm the user prefers the board's **box-drag navigator** style (image #10)
+  and wants the Studio minimap/zoom pill remade to match it.
+- **Priority:** ask the user which of #3 / #4 / #5 to build first (my recommendation: **#3 notes line**,
+  since it directly fixes the "notes side is too rough" pain and is smaller than #4).
+
 **STABILITY RULE (overarching):** the app is ONE track/data model edited from many views — every edit
 must propagate to the volume view, notes view, Studio grid, playback AND undo. Don't add parallel data;
 wire through the shared point/lane/take model + `tracks_changed`/`take_audio_changed`/`_board_fp`.
@@ -12,13 +30,18 @@ wire through the shared point/lane/take model + `tracks_changed`/`take_audio_cha
 2. [x] **Remove the "⊞ Separator" toolbar button** — obsolete (one-screen default, board always present).
 3. [ ] **A LINE between points in the NOTES view** (like the volume Bézier) → sustained notes + glides/
    variants. Notes are discrete pitched hits today; add the same curve tool so a held/sliding note can be
-   drawn. NEEDS DESIGN: how a curve segment maps to a sustained/gliding Event (pitch glide vs held note).
+   drawn. NEEDS DESIGN (see START HERE): pitch glide vs held note vs both.
+   - Implementation notes: notes live in per-point `midi` on the shared `points` list (`_notes_press/
+     _notes_move` in `separationboard.py`); pitched playback already works via `Event.pitch` +
+     `synth.sample_voice`/`voice`. A "line" likely = a per-segment curve (reuse `seg_ctrls`/`_sample_curve`
+     from the volume Bézier) that emits ONE sustained `Event` with an `env`/pitch-track (drums = resample
+     glide `synth.sample_voice(..., loop=True)`; synth already has `morph_glide`/`glide_voice`).
 4. [ ] **Instrument picker restructure (BIG).** Pull **Synth** + **Original** OUT of the dropdown into a
    top-level selector **Original · Hum · Synth · Instrument**: Original = your recording; Hum = pick from
    **≥10 hum voices**; Synth = **≥10 synth presets**; Instrument = **categories** (drum, strings, winds, …)
-   with many more than today's ~15. NEEDS CONTENT DECISIONS (which hums/synths/categories) + engine work.
+   with many more than today's ~15. NEEDS CONTENT DECISIONS (see START HERE) + engine work.
 5. [ ] **Unify the navigator/zoom** — Studio minimap+zoom pill and the board navigator should behave the
-   same; user prefers the box-drag style. NEEDS the two current implementations compared.
+   same; user prefers the box-drag style (image #10). NEEDS the two current implementations compared.
 
 ## v0.32.2 — finer notes grid + removed the Separator button
 - **Notes snap is now super-fine:** `_snap_t` uses `NOTE_SNAP_DIV=48` (1/48 of a beat) instead of the
