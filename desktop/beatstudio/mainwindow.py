@@ -513,6 +513,7 @@ class MainWindow(QMainWindow):
         board.record_requested.connect(self._toggle_master_record)
         board.record_secondary_requested.connect(self._toggle_secondary_record)
         board.tracks_changed.connect(self._on_board_track_changed)
+        board.take_audio_changed.connect(self._on_take_audio_changed)
         board.bpm_changed.connect(self._on_board_bpm)
         board.point_selected.connect(self._on_board_point_selected)
         board.playhead_moved.connect(self._on_board_playhead)
@@ -941,19 +942,37 @@ class MainWindow(QMainWindow):
     def _refresh_undo_buttons(self):
         self.toolbar.set_undo_state(bool(self._undo_stack), bool(self._redo_stack))
 
+    def _on_take_audio_changed(self):
+        """The board's take waveform itself changed (Fit stretch / delete) → the ACTUAL sound must
+        follow, not just the picture. Keep play-original / render in sync with the (main) take."""
+        if self._board is not None:
+            self._orig_rec = np.asarray(self._board.buf, np.float32)
+            self._rerender_if_playing()
+
+    def _board_fp(self):
+        """A cheap fingerprint of board state that ISN'T in the Studio project — take audio lengths +
+        grid offset + bpm — so `_commit` also fires for audio-only changes (Fit, grid move, delete)."""
+        b = getattr(self, "_board", None)
+        if b is None:
+            return None
+        return (tuple((tk["id"], len(tk["buf"])) for tk in b.takes),
+                round(b.canvas.grid_off, 4), int(b.bpm))
+
     def _snapshot(self):
         """One undo entry = the Studio project AND the Separation Board (points/takes)."""
         board = getattr(self, "_board", None)
         return {"project": persistence.to_dict(self.project),
-                "board": board.snapshot() if board is not None else None}
+                "board": board.snapshot() if board is not None else None,
+                "fp": self._board_fp()}
 
     def _restore(self, blob):
-        """Restore BOTH windows from an undo entry (project + board drawn state)."""
+        """Restore BOTH windows from an undo entry (project + board drawn state + take audio)."""
         self._syncing = True
         try:
             self._set_project(persistence.from_dict(blob["project"]))
             if self._board is not None and blob.get("board") is not None:
                 self._board.restore(blob["board"])
+                self._orig_rec = np.asarray(self._board.buf, np.float32)   # the SOUND follows the restored take
         finally:
             self._syncing = False
         self.timeline.set_project(self.project)
@@ -961,12 +980,14 @@ class MainWindow(QMainWindow):
 
     def _commit(self):
         proj = persistence.to_dict(self.project)
-        if self._committed is not None and proj == self._committed.get("project"):
-            return                          # nothing changed on the grid
+        fp = self._board_fp()
+        if (self._committed is not None and proj == self._committed.get("project")
+                and fp == self._committed.get("fp")):
+            return                          # nothing changed on the grid OR the board audio/grid
         self._undo_stack.append(self._committed)
         self._undo_stack = self._undo_stack[-80:]
         self._redo_stack.clear()
-        self._committed = {"project": proj, "board": self._board.snapshot() if self._board else None}
+        self._committed = {"project": proj, "board": self._board.snapshot() if self._board else None, "fp": fp}
         self._refresh_undo_buttons()
 
     def _undo(self):

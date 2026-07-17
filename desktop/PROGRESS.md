@@ -1,8 +1,25 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.32.0** (shown in the window title bar as
-`Beat Studio · v0.32.0`).
+continuing in a new chat.** Current version: **v0.32.1** (shown in the window title bar as
+`Beat Studio · v0.32.1`).
+
+## v0.32.1 — Fit stretches the ACTUAL sound · Grid = left-stretch/right-move · undo covers audio
+Three bugs the user hit:
+- **Fit now stretches the real audio, not just the picture.** Root: `_apply_fit` resampled the take
+  buffer but `_orig_rec` (what play-original/render actually use) was never updated. New board signal
+  `take_audio_changed` (emitted by `_apply_fit` + `_delete_take`) → `MainWindow._on_take_audio_changed`
+  syncs `self._orig_rec = self._board.buf` + re-renders. Verified: Fit shrinks take 88200→66150 AND
+  orig_rec 88200→66150.
+- **Undo/redo now covers audio/grid changes (was project-only).** Root: `_commit` deduped on the Studio
+  project dict alone, so an audio-only change (Fit on a track with no beats, grid move, take delete)
+  created NO undo entry. Added `_board_fp()` = (take-ids+lengths, grid_off, bpm); `_commit` fires when
+  that fingerprint OR the project changed. `_restore` now also restores `_orig_rec` from the board take.
+  Verified: Fit undo/redo restores take+orig_rec (88200↔66150); grid move undoable (off 0.30→0.00).
+- **Grid tool remapped: LEFT-drag = stretch/shrink tempo, RIGHT-drag = move the grid sideways** (was
+  plain=move / Shift=stretch, which felt broken). `mousePressEvent` routes button→`_grid_press(stretch=
+  left)`; `mouseMoveEvent` accepts either button. Tooltip updated. `board_check` GRID tests updated
+  (stretch=left-drag, move=right-drag).
 
 ## v0.32.0 — delete a soundwave (✕) + MOVE the grid sideways (phase offset)
 - **Delete a soundwave.** A small **✕** at the top-right of each take (top-right of the piano-roll in

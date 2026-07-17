@@ -678,11 +678,11 @@ class CurveCanvas(QWidget):
                     return ("handle_" + side, self.active, pi)
         return None
 
-    # --- Grid tool: plain drag = MOVE the grid sideways (phase); Shift-drag = stretch tempo ---
+    # --- Grid tool: LEFT-drag = stretch/shrink tempo · RIGHT-drag = move the grid sideways (phase) ---
     def _grid_press(self, pos, stretch=False):
         dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
         t, _ = self._from_px(pos.x(), pos.y(), 0)
-        if stretch:                                           # Shift-drag: grab a beat and scale tempo
+        if stretch:                                           # left-drag: grab a beat and scale tempo
             beat = (t * dur - self.grid_off) / beat_len
             self._grid_grab = beat if beat > 0.25 else None
             self._grid_pan = None
@@ -754,7 +754,9 @@ class CurveCanvas(QWidget):
             self._notes_press(ev, pos); return
         if self.tool == "grid":
             if ev.button() == Qt.LeftButton:
-                self._grid_press(pos, bool(ev.modifiers() & Qt.ShiftModifier))
+                self._grid_press(pos, stretch=True)        # left-drag = stretch/shrink tempo
+            elif ev.button() == Qt.RightButton:
+                self._grid_press(pos, stretch=False)       # right-drag = move the grid sideways
             return
         if self.tool == "fit":
             self._fit_press(ev, pos)
@@ -878,7 +880,7 @@ class CurveCanvas(QWidget):
         if self._pan_mm:
             r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update(); return
         if self.tool == "grid":
-            if ev.buttons() & Qt.LeftButton:
+            if ev.buttons() & (Qt.LeftButton | Qt.RightButton):
                 self._grid_move(pos)
             return
         if self.tool == "fit":
@@ -1188,6 +1190,7 @@ class SeparationBoard(QWidget):
     record_requested = Signal()          # ● Record main (the primary take)
     record_secondary_requested = Signal()  # ● Record secondary (overdub on top of the main)
     tracks_changed = Signal(str)         # a track/points changed → live-sync that lane (id, "" = all)
+    take_audio_changed = Signal()        # the take WAVEFORM itself changed (Fit stretch / delete) → resync audio
     bpm_changed = Signal(int)            # the board's BPM box changed → sync the Studio
     point_selected = Signal(str)         # a drawn anchor was selected → highlight its Studio beat
     playhead_moved = Signal(float)       # preview playhead (take-fraction 0..1, -1 = cleared)
@@ -1258,7 +1261,7 @@ class SeparationBoard(QWidget):
         top.addWidget(self._dim("tool"))
         self._tool_btns = {}
         for name, glyph, tip in (("pen", "✎ Pen", "Draw sounds — place points on the wave"),
-                                 ("grid", "⇋ Grid", "Drag = move the grid sideways · Shift-drag = stretch tempo"),
+                                 ("grid", "⇋ Grid", "Left-drag = stretch/shrink tempo · Right-drag = move the grid"),
                                  ("fit", "⤢ Fit", "Pick two points on the wave, then drag to stretch/shrink that audio")):
             b = QPushButton(glyph); b.setCursor(Qt.PointingHandCursor); b.setFixedHeight(30); b.setToolTip(tip)
             b.clicked.connect(lambda _=False, n=name: self._set_tool(n))
@@ -1585,6 +1588,7 @@ class SeparationBoard(QWidget):
         self.canvas.set_takes(self.takes)
         self.canvas.view0, self.canvas.view1 = v0, v1
         self.canvas.active_changed.emit(self.canvas.active); self._refresh()
+        self.take_audio_changed.emit()                     # the main take audio may have changed
         self.tracks_changed.emit("")                       # structural resync (Studio drops the lanes)
 
     def _ensure_pt_ids(self, tr):
@@ -1703,6 +1707,7 @@ class SeparationBoard(QWidget):
         self.canvas.set_takes(self.takes)
         self.canvas.view0, self.canvas.view1 = v0, v1
         self.canvas.update()
+        self.take_audio_changed.emit()                         # the actual audio changed length
         self.tracks_changed.emit("")                           # structural: resync all lanes + undo
 
     # ---- tempo / zoom / playhead ----

@@ -294,25 +294,25 @@ assert float(_np.abs(quiet).sum()) < float(_np.abs(loud).sum()), \
 lane_v.vol_pts = []
 print("VOLUME ok: V toggles the line; a vol_pts dip renders quieter (per-lane gain)")
 
-# GRID STRETCH: Shift-drag in Grid mode uniformly rescales the tempo (bpm)
+# GRID STRETCH: LEFT-drag in Grid mode uniformly rescales the tempo (bpm)
 bd._set_tool("grid")
 cvg = bd.canvas; xg0, xg1 = cvg._xspan(); gx = xg0 + (xg1 - xg0) * 0.5
 bpm0 = bd.bpm
-cvg.mousePressEvent(E(gx, cvg.height() / 2, mods=Qt.ShiftModifier))
-cvg.mouseMoveEvent(E(gx + 120, cvg.height() / 2, mods=Qt.ShiftModifier))
+cvg.mousePressEvent(E(gx, cvg.height() / 2))
+cvg.mouseMoveEvent(E(gx + 120, cvg.height() / 2))
 cvg.mouseReleaseEvent(None)
 app.processEvents()
 assert bd.bpm != bpm0 and w.project.bpm == bd.bpm, f"grid stretch failed ({bpm0}->{bd.bpm}, studio={w.project.bpm})"
-print(f"GRID ok: Shift-drag rescaled tempo {bpm0}->{bd.bpm} and synced to the Studio")
+print(f"GRID ok: left-drag rescaled tempo {bpm0}->{bd.bpm} and synced to the Studio")
 
-# GRID MOVE: plain drag in Grid mode slides the grid sideways (offset), no tempo change
+# GRID MOVE: RIGHT-drag in Grid mode slides the grid sideways (offset), no tempo change
 off0 = cvg.grid_off; bpm_before = bd.bpm
-cvg.mousePressEvent(E(gx, cvg.height() / 2))
-cvg.mouseMoveEvent(E(gx + 60, cvg.height() / 2))
+cvg.mousePressEvent(E(gx, cvg.height() / 2, btn=Qt.RightButton))
+cvg.mouseMoveEvent(E(gx + 60, cvg.height() / 2, btn=Qt.RightButton))
 cvg.mouseReleaseEvent(None)
 app.processEvents()
 assert cvg.grid_off != off0 and bd.bpm == bpm_before, f"grid move failed (off {off0}->{cvg.grid_off}, bpm {bpm_before}->{bd.bpm})"
-print(f"GRID MOVE ok: plain drag slid the grid (offset {off0:.3f}->{cvg.grid_off:.3f}s), tempo unchanged")
+print(f"GRID MOVE ok: right-drag slid the grid (offset {off0:.3f}->{cvg.grid_off:.3f}s), tempo unchanged")
 bd._set_tool("pen")
 
 # FIT: resample an audio slice shrinks the take and remaps points (in-region moves, before-region ~stays)
