@@ -329,6 +329,158 @@ def click(accent: bool = False) -> np.ndarray:
             * np.exp(-_t(n) / 0.006) * (0.3 if accent else 0.18))
 
 
+# ---------------- HUM voices (formant / vowel synthesis) ----------------
+# A hum = a glottal source (rich harmonics) shaped by 2-3 fixed FORMANT resonances (a vowel). The
+# source pitch moves but the formants stay put, so it "sings" the vowel at any pitch — and being an
+# oscillator it glides for free (needed by the NOTES-view pitch line). Sliders live in HUM_KNOBS.
+HUM_SPECS = {
+    "aah":     {"f": (730, 1090, 2440), "src": "saw",    "breath": 0.03, "label": "Aah"},
+    "eee":     {"f": (270, 2290, 3010), "src": "saw",    "breath": 0.03, "label": "Eee"},
+    "ooh":     {"f": (300, 870, 2240),  "src": "saw",    "breath": 0.02, "label": "Ooh"},
+    "ohh":     {"f": (450, 800, 2830),  "src": "saw",    "breath": 0.02, "label": "Ohh"},
+    "eh":      {"f": (530, 1840, 2480), "src": "saw",    "breath": 0.03, "label": "Eh"},
+    "ih":      {"f": (390, 1990, 2550), "src": "saw",    "breath": 0.03, "label": "Ih"},
+    "uh":      {"f": (640, 1190, 2390), "src": "saw",    "breath": 0.03, "label": "Uh"},
+    "mmm":     {"f": (250, 1100, 2000), "src": "square", "breath": 0.0,  "label": "Mmm (hum)"},
+    "nng":     {"f": (280, 1700, 2600), "src": "square", "breath": 0.0,  "label": "Nng"},
+    "breathy": {"f": (320, 900, 2200),  "src": "saw",    "breath": 0.14, "label": "Breathy Ooo"},
+    "choir":   {"f": (660, 1120, 2600), "src": "saw",    "breath": 0.05, "label": "Choir Aah", "detune": True},
+    "falsetto":{"f": (400, 1700, 2800), "src": "sine",   "breath": 0.06, "label": "Falsetto"},
+}
+HUMS = list(HUM_SPECS.keys())
+
+HUM_KNOBS = [
+    ("bright",   "Bright",  0, 100, 50,  100.0),   # formant tilt / air
+    ("breath",   "Breath",  0, 100, 25,  100.0),   # breath-noise mix
+    ("vibrate",  "Vib",     0, 100, 30,  100.0),   # vibrato RATE
+    ("vibdepth", "VibDep",  0, 100, 25,  100.0),   # vibrato DEPTH
+    ("attack",   "Attack",  0, 100, 15,  100.0),
+    ("release",  "Release", 0, 100, 20,  100.0),
+    ("level",    "Level",   0, 150, 100, 100.0),
+]
+
+
+def default_hum_params() -> dict:
+    return {k: (v / sc) for k, _, _, _, v, sc in HUM_KNOBS}
+
+
+def _freq_array(freq, dur):
+    """Normalise a scalar-freq(+dur) OR a per-sample freq array into a freq array (glide-ready)."""
+    if np.isscalar(freq):
+        n = int(SR * max(0.08, (dur if dur else 0.6)))
+        return np.full(n, float(freq), np.float32)
+    f = np.asarray(freq, np.float32).ravel()
+    return np.maximum(30.0, f)
+
+
+def hum_voice(preset: str, freq, dur: float = None, vel: float = 0.9, params=None) -> np.ndarray:
+    """A sung vowel. `freq` may be a scalar (with `dur`) or a per-sample array (a glide)."""
+    spec = HUM_SPECS.get(preset, HUM_SPECS["aah"])
+    p = params or default_hum_params()
+    f = _freq_array(freq, dur); n = len(f)
+    if n < 2:
+        return np.zeros(1, np.float32)
+    t = _t(n)
+    vib = 0.6 + 7.0 * float(p.get("vibrate", 0.3))        # 0.6..7.6 Hz
+    depth = 0.03 * float(p.get("vibdepth", 0.25))          # up to ~3% pitch wobble
+    fmod = f * (1.0 + depth * np.sin(2 * np.pi * vib * t).astype(np.float32))
+    phase = np.cumsum(2 * np.pi * fmod / SR).astype(np.float32)
+    src = _wave_shape("saw" if spec["src"] == "saw" else spec["src"], phase)
+    if spec.get("detune"):                                 # choir = a couple of detuned voices
+        src = 0.6 * src + 0.4 * _wave_shape("saw", phase * 1.006)
+    out = np.zeros(n, np.float32)
+    for i, fc in enumerate(spec["f"]):
+        out += _bp(src, float(fc), q=9.0) * (0.9 ** i)
+    breath = float(p.get("breath", 0.25)) * spec["breath"] * 4.0
+    if breath > 1e-3:
+        out += breath * _hp(_noise(n), 2500) * 0.4
+    bright = float(p.get("bright", 0.5))                    # brighten = let more highs through
+    out = _lp(out, 1500 + 6000 * bright)
+    mx = float(np.abs(out).max()) + 1e-6
+    out = out / mx
+    atk = 0.005 + 0.35 * float(p.get("attack", 0.15)); rel = 0.02 + 0.5 * float(p.get("release", 0.2))
+    out = out * _adsr(n, min(atk, n / SR * 0.5), min(rel, n / SR * 0.6))
+    return (out * 0.5 * float(p.get("level", 1.0)) * max(0.2, min(1.2, vel))).astype(np.float32)
+
+
+# ---------------- pitched INSTRUMENTS (categories) ----------------
+# Each instrument is a family recipe (partials + envelope + brightness + vibrato) with a per-instrument
+# octave shift. Additive/oscillator based, so everything pitches and GLIDES. Not studio-accurate, but
+# distinct and tweakable — the point is a big, usable palette. Grouped into categories for the picker.
+INST_CATEGORIES = [
+    ("Mallets", ["marimba", "xylophone", "vibraphone", "glockenspiel", "kalimba", "musicbox"]),
+    ("Keys",    ["piano", "epiano", "clav", "harpsichord"]),
+    ("Strings", ["violin", "viola", "cello", "contrabass", "pizzicato", "harp"]),
+    ("Winds",   ["flute", "clarinet", "oboe", "panflute", "recorder"]),
+    ("Brass",   ["trumpet", "trombone", "frenchhorn", "tuba"]),
+    ("Bass",    ["subbass", "fingerbass", "pickbass", "synthbass"]),
+    ("Bells",   ["tubularbell", "chime", "celesta"]),
+]
+# name: (family, semitone_shift, brightness 0..1, vibrato 0..1)
+INST_SPECS = {
+    "marimba": ("mallet", 0, 0.6, 0.0),   "xylophone": ("mallet", 12, 0.85, 0.0),
+    "vibraphone": ("mallet", 0, 0.5, 0.35), "glockenspiel": ("mallet", 24, 0.95, 0.0),
+    "kalimba": ("mallet", 0, 0.55, 0.0),  "musicbox": ("mallet", 12, 0.75, 0.0),
+    "piano": ("key", 0, 0.55, 0.0),       "epiano": ("key", 0, 0.4, 0.0),
+    "clav": ("key", 0, 0.75, 0.0),        "harpsichord": ("key", 0, 0.8, 0.0),
+    "violin": ("string", 12, 0.6, 0.5),   "viola": ("string", 5, 0.5, 0.5),
+    "cello": ("string", -12, 0.4, 0.4),   "contrabass": ("string", -24, 0.3, 0.3),
+    "pizzicato": ("pluckstring", 0, 0.5, 0.0), "harp": ("pluckstring", 0, 0.55, 0.0),
+    "flute": ("wind", 12, 0.35, 0.25),    "clarinet": ("windodd", 0, 0.4, 0.2),
+    "oboe": ("wind", 5, 0.65, 0.3),       "panflute": ("wind", 12, 0.3, 0.15),
+    "recorder": ("wind", 12, 0.4, 0.1),
+    "trumpet": ("brass", 5, 0.7, 0.25),   "trombone": ("brass", -7, 0.6, 0.2),
+    "frenchhorn": ("brass", -2, 0.5, 0.2), "tuba": ("brass", -19, 0.4, 0.15),
+    "subbass": ("sub", -12, 0.2, 0.0),    "fingerbass": ("pluckstring", -12, 0.35, 0.0),
+    "pickbass": ("pluckstring", -12, 0.55, 0.0), "synthbass": ("sub", -12, 0.5, 0.0),
+    "tubularbell": ("bell", 0, 0.6, 0.0), "chime": ("bell", 12, 0.7, 0.0),
+    "celesta": ("bell", 12, 0.6, 0.0),
+}
+INSTS = list(INST_SPECS.keys())
+
+# family → (partials as (ratio, gain), envelope kind)
+_FAMILY_PARTIALS = {
+    "mallet":      [(1, 1.0), (3.9, 0.5), (9.2, 0.15)],
+    "key":         [(1, 1.0), (2, 0.5), (3, 0.3), (4, 0.16), (5, 0.08)],
+    "string":      [(1, 1.0), (2, 0.6), (3, 0.45), (4, 0.3), (5, 0.2), (6, 0.12)],
+    "pluckstring": [(1, 1.0), (2, 0.55), (3, 0.4), (4, 0.25), (5, 0.15)],
+    "wind":        [(1, 1.0), (2, 0.5), (3, 0.22), (4, 0.1)],
+    "windodd":     [(1, 1.0), (3, 0.6), (5, 0.35), (7, 0.18)],
+    "brass":       [(1, 1.0), (2, 0.7), (3, 0.5), (4, 0.36), (5, 0.22), (6, 0.12)],
+    "sub":         [(1, 1.0), (2, 0.3)],
+    "bell":        [(1, 1.0), (2.76, 0.5), (5.4, 0.25), (8.9, 0.12)],
+}
+_SUSTAIN_FAMILIES = {"string", "wind", "windodd", "brass", "sub"}
+
+
+def inst_voice(preset: str, freq, dur: float = None, vel: float = 0.85, params=None) -> np.ndarray:
+    """A pitched instrument voice. `freq` may be scalar (+dur) or a per-sample array (a glide)."""
+    fam, shift, bright, vib = INST_SPECS.get(preset, ("key", 0, 0.5, 0.0))
+    f = _freq_array(freq, dur) * (2.0 ** (shift / 12.0)); n = len(f)
+    if n < 2:
+        return np.zeros(1, np.float32)
+    t = _t(n)
+    if vib > 1e-3:
+        f = f * (1.0 + 0.02 * vib * np.sin(2 * np.pi * 5.5 * t).astype(np.float32))
+    sustain = fam in _SUSTAIN_FAMILIES
+    out = np.zeros(n, np.float32)
+    for ratio, gain in _FAMILY_PARTIALS[fam]:
+        ph = np.cumsum(2 * np.pi * f * ratio / SR).astype(np.float32)
+        wav = signal.sawtooth(ph) if (fam == "brass" and ratio == 1) else np.sin(ph)
+        out += gain * wav.astype(np.float32)
+    if fam in ("wind", "windodd"):
+        out += 0.06 * _hp(_noise(n), 3000)              # breath
+    out = _lp(out, 500 + 8000 * bright)
+    out /= (float(np.abs(out).max()) + 1e-6)
+    if sustain:
+        env = _adsr(n, min(0.06, n / SR * 0.4), min(0.12, n / SR * 0.4))
+    else:                                                # struck/plucked: exponential decay
+        dk = {"bell": 2.2, "mallet": 0.6, "key": 0.9, "pluckstring": 0.5}.get(fam, 0.8)
+        env = np.exp(-t / max(1e-3, dk)).astype(np.float32)
+    p = params or {}
+    return (out * env * 0.5 * float(p.get("level", 1.0)) * max(0.2, min(1.2, vel))).astype(np.float32)
+
+
 # ---------------- sampler ----------------
 def sample_voice(buf: np.ndarray, base_pitch: int, pitch: int, dur: float,
                  vel: float = 0.85, loop: bool = True) -> np.ndarray:

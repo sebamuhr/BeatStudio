@@ -76,13 +76,10 @@ b.bpm_box.setValue(140); assert b.canvas.bpm == 140, "bpm control not wired"
 b._start_playhead(1.0); app.processEvents()
 b._tick_playhead(); print("playhead:", b.canvas.playhead)
 
-# --- SYNTH (B+C): ONE 'Synth' instrument with two fields; a sustained line = a held morphing note ---
+# --- SYNTH (B+C): the Synth group opens the two-field designer; a sustained line = a held morph note ---
 b.add_track(); st = b.tracks[-1]; row = b._rows[-1]
-si = next(i for i, (k, s, l) in enumerate(b.items) if k == "synth")
-row.combo.setCurrentIndex(si); row.combo_base.setCurrentText("sine"); row.combo_mod.setCurrentText("saw")
+row._on_group("Synth"); row.combo_base.setCurrentText("sine"); row.combo_mod.setCurrentText("saw")
 assert st["kind"] == "synth" and st["sound"] == "sine" and st["sound_b"] == "saw", st
-# a single 'Synth' entry in the picker (not one per waveform)
-assert sum(1 for k, s, l in b.items if k == "synth") == 1, "expected exactly one Synth entry"
 b._activate_track(st)
 st["points"] = [{"t": 0.10, "v": 0.0, "hx": 0, "hy": 0}, {"t": 0.16, "v": 0.35, "hx": 0, "hy": 0},
                 {"t": 0.45, "v": 0.9, "hx": 0, "hy": 0}, {"t": 0.50, "v": 0.0, "hx": 0, "hy": 0}]
@@ -325,6 +322,32 @@ bd.canvas.set_sel_take(1); assert bd.canvas.mode == "notes", "selecting a wave d
 bd.canvas.set_sel_take(0); assert bd.canvas.mode == "volume", "selecting a wave did not restore its view"
 bd._delete_track(bd.tracks[-1]); bd._set_mode("volume")
 print("WAVE CONTROLS ok: soundwave Solo/Mute reach the lanes; add-track binds to the wave; mode remembered")
+
+# INSTRUMENTS (#4): the top-level Original·Hum·Synth·Instrument selector switches kind + sub-picker;
+# hum and pitched-instrument voices render.
+from beatstudio.render import render_project as _rp
+from beatstudio.model import Project as _Proj
+from beatstudio import synth as _syn
+assert len(_syn.HUMS) >= 10 and len(_syn.INSTS) >= 20, "need ≥10 hums and a big instrument palette"
+bd.canvas.set_sel_take(0); bd.add_track(); hrow = bd._rows[-1]; htr = bd.tracks[-1]
+hrow._on_group("Hum")
+assert htr["kind"] == "hum" and htr["sound"] in _syn.HUMS, "Hum group did not set a hum voice"
+vi = next(i for i, (k, s, l) in enumerate(hrow._combo_items) if s == "eee")
+hrow.combo.setCurrentIndex(vi); assert htr["sound"] == "eee", "hum sub-picker did not set the sound"
+bd.add_track(); irow = bd._rows[-1]; itr = bd.tracks[-1]
+irow._on_group("Instrument")
+vj = next(i for i, (k, s, l) in enumerate(irow._combo_items) if s == "violin")
+irow.combo.setCurrentIndex(vj)
+assert itr["kind"] == "inst" and itr["sound"] == "violin", "Instrument group did not pick the violin"
+# both render audibly (a held note each)
+for _t, _snd in ((htr, "eee"), (itr, "violin")):
+    _t["points"] = [{"id": "z", "t": 0.2, "v": 0.8, "midi": 62, "hx": 0, "hy": 0}]
+_hl, _he = bd._lane_events(htr); _il, _ie = bd._lane_events(itr)
+_pp = _Proj(bpm=120); _pp.lanes += [_hl, _il]; _pp.events += _he + _ie
+_out, _ = _rp(_pp, {})
+assert float(np.abs(_out).sum()) > 0, "hum/instrument rendered silent"
+bd._delete_track(itr); bd._delete_track(htr)
+print(f"INSTRUMENTS ok: {len(_syn.HUMS)} hums + {len(_syn.INSTS)} instruments; group selector + voices render")
 
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed

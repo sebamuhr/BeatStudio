@@ -65,6 +65,14 @@ def _voice_for(lane, e, spb, li, samples):
             x = synth.morph_synth(lane.sound or "sine", lane.sound_b, freq, dur, e.vel, e.morph, m1)
         else:
             x = synth.voice(lane.sound or "square", freq, dur, e.vel, bp)
+    elif kind == "hum":
+        freq = synth.midi_to_hz((e.pitch if e.pitch is not None else 60) + tune)
+        dur = max(0.15, (e.length or 0) * spb) if e.length else 0.5
+        x = synth.hum_voice(lane.sound or "aah", freq, dur, e.vel, getattr(lane, "sound_params", None))
+    elif kind == "inst":
+        freq = synth.midi_to_hz((e.pitch if e.pitch is not None else 60) + tune)
+        dur = max(0.12, (e.length or 0) * spb) if e.length else 0.5
+        x = synth.inst_voice(lane.sound or "piano", freq, dur, e.vel, getattr(lane, "sound_params", None))
     elif kind == "sample":
         samp = (samples or {}).get(lane.sound)
         if samp is not None:

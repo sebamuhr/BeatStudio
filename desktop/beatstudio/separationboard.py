@@ -24,19 +24,56 @@ from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QElapsedTimer, Q
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 
 from . import theme, groove
-from .synth import SR, WAVES, SYNTH_KNOBS, default_params, FX_KNOBS, default_fx
+from .synth import (SR, WAVES, SYNTH_KNOBS, default_params, FX_KNOBS, default_fx,
+                    HUM_SPECS, HUMS, HUM_KNOBS, default_hum_params,
+                    INST_CATEGORIES, INST_SPECS, DRUMS)
 from .model import Lane, Event, uid
 from .analysis import onset_start
 from .settings import ITEMS as INSTRUMENT_ITEMS
 
 
 def _collapse_items(raw):
-    """The board's instrument picker shows each DRUM, a single 'Synth' (its two waveforms are
-    chosen in the row) and 'Original' — NOT one entry per synth waveform."""
+    """Kept for back-compat (old callers). The picker is now grouped — see GROUPS / _group_items."""
     raw = list(raw)
     drums = [it for it in raw if it[0] == "drum"]
-    # "Original" = play your OWN recorded sound for this track's hits, through an FX rack.
     return drums + [("synth", WAVES[0], "Synth"), ("original", "", "Original")]
+
+
+# The instrument picker is a TOP-LEVEL selector: Original · Hum · Synth · Instrument. Each opens its
+# own sub-picker (a combo of that group's sounds; Synth opens the Base/Modulator designer; Original
+# just the FX rack). "Instrument" lists real categories (Drum + pitched families).
+GROUPS = ["Original", "Hum", "Synth", "Instrument"]
+
+
+def _instrument_items():
+    """(kind, sound, 'Category — Name') for every Instrument-group sound: Drums + pitched families."""
+    items = [("drum", k, "Drum — " + k.title()) for k in DRUMS]
+    for cat, names in INST_CATEGORIES:
+        for nm in names:
+            items.append(("inst", nm, f"{cat} — {nm.title()}"))
+    return items
+
+
+def _group_items(group):
+    """The (kind, sound, label) list shown in a group's sub-combo (empty for Original/Synth, which
+    use the FX rack / synth designer instead of a plain combo)."""
+    if group == "Hum":
+        return [("hum", h, HUM_SPECS[h].get("label", h.title())) for h in HUMS]
+    if group == "Instrument":
+        return _instrument_items()
+    return []
+
+
+def _group_of(track):
+    """Which top-level group a track's kind belongs to."""
+    k = track.get("kind")
+    if k == "original":
+        return "Original"
+    if k == "hum":
+        return "Hum"
+    if k == "synth":
+        return "Synth"
+    return "Instrument"        # drum / inst
 
 DOT_R = 5.5
 HIT_R = 12.0
@@ -1265,14 +1302,20 @@ class TrackRow(QFrame):
         top.addWidget(self.swatch); top.addWidget(self.name, 1); top.addWidget(self.eye); top.addWidget(self.b_del)
         lay.addLayout(top)
 
+        # TOP-LEVEL group selector: Original · Hum · Synth · Instrument
+        grp = QHBoxLayout(); grp.setSpacing(4)
+        self._grp_btns = {}
+        for g in GROUPS:
+            gb = QPushButton(g); gb.setCursor(Qt.PointingHandCursor); gb.setFixedHeight(26)
+            gb.setFont(theme.sans(10, 600))
+            gb.clicked.connect(lambda _=False, gg=g: self._on_group(gg))
+            self._grp_btns[g] = gb; grp.addWidget(gb)
+        lay.addLayout(grp)
+
         bot = QHBoxLayout(); bot.setSpacing(8)
         self.combo = QComboBox(); self.combo.setFont(theme.sans(11)); self.combo.setMinimumHeight(30)
-        for _, _, lbl in items:
-            self.combo.addItem(lbl)
-        idx = next((i for i, (k, s, _) in enumerate(items)
-                    if (k == "synth" and track["kind"] == "synth") or (k == track["kind"] and s == track["sound"])), 0)
-        self.combo.setCurrentIndex(idx)
         self.combo.setStyleSheet(_COMBO_CSS)
+        self._combo_items = []
         self.combo.currentIndexChanged.connect(self._on_instrument)
         self.b_prev = QPushButton("▶"); self.b_prev.setFixedSize(34, 30); self.b_prev.setCursor(Qt.PointingHandCursor)
         self.b_prev.setToolTip("Preview what you've drawn for this track")
@@ -1320,6 +1363,20 @@ class TrackRow(QFrame):
             fxl.addLayout(self._knob_row(track["fx"], key, label, mn, mx, dflt, scale))
         lay.addWidget(self.fxpanel)
         self.fxpanel.setVisible(track["kind"] == "original")
+
+        # HUM KNOBS — vowel voice controls (brightness / breath / vibrato / …), shown for a Hum track.
+        self.humpanel = QWidget(); huml = QVBoxLayout(self.humpanel)
+        huml.setContentsMargins(0, 2, 0, 0); huml.setSpacing(3)
+        hhead = QLabel("HUM — sung vowel"); hhead.setStyleSheet("color:#c0a8ff;font-size:10px;font-weight:700;")
+        huml.addWidget(hhead)
+        track.setdefault("hum_params", default_hum_params())
+        for key, label, mn, mx, dflt, scale in HUM_KNOBS:
+            huml.addLayout(self._knob_row(track["hum_params"], key, label, mn, mx, dflt, scale))
+        lay.addWidget(self.humpanel)
+        self.humpanel.setVisible(track["kind"] == "hum")
+
+        self._group = _group_of(track)
+        self._refresh_group_ui()
 
         # Reliable selection: a press anywhere on the row (even on a label/slider/combo) selects it.
         for w in self.findChildren(QWidget):
@@ -1421,22 +1478,55 @@ class TrackRow(QFrame):
     def _tag(self, t):
         l = QLabel(t); l.setStyleSheet("color:#8a8a99;font-size:10px;font-weight:600;"); return l
 
-    def _on_instrument(self, idx):
-        if not (0 <= idx < len(self.items)):
-            return
-        k, s, _ = self.items[idx]
-        self.track["kind"] = k
-        if k == "synth":
-            self.track.setdefault("params", default_params())
-            self.track.setdefault("params_b", default_params())
+    def _refresh_group_ui(self):
+        """Show the sub-picker/panel for the current group and select the track's current sound."""
+        g = self._group
+        for name, b in self._grp_btns.items():
+            b.setStyleSheet(_TOOL_ON if name == g else _TOOL_OFF)
+        self.syn.setVisible(g == "Synth")
+        self.fxpanel.setVisible(g == "Original")
+        self.humpanel.setVisible(g == "Hum")
+        self._combo_items = _group_items(g)
+        self.combo.blockSignals(True)
+        self.combo.clear()
+        for _, _, lbl in self._combo_items:
+            self.combo.addItem(lbl)
+        if self._combo_items:
+            idx = next((i for i, (k, s, _) in enumerate(self._combo_items)
+                        if k == self.track["kind"] and s == self.track["sound"]), 0)
+            self.combo.setCurrentIndex(idx)
+        self.combo.blockSignals(False)
+        self.combo.setVisible(g in ("Hum", "Instrument"))     # Original/Synth use their own panels
+
+    def _on_group(self, g):
+        """Top-level Original · Hum · Synth · Instrument selector."""
+        self._group = g
+        if g == "Original":
+            self.track["kind"] = "original"; self.track["sound"] = ""; self.track["sound_b"] = ""
+            self.track.setdefault("fx", default_fx())
+        elif g == "Synth":
+            self.track["kind"] = "synth"
+            self.track.setdefault("params", default_params()); self.track.setdefault("params_b", default_params())
             if self.track["sound"] not in WAVES:
                 self.track["sound"] = self.combo_base.currentText()
             if self.track.get("sound_b") not in WAVES:
                 self.track["sound_b"] = self.combo_mod.currentText()
-        else:
-            self.track["sound"] = s; self.track["sound_b"] = ""
-        self.syn.setVisible(k == "synth")
-        self.fxpanel.setVisible(k == "original")
+        elif g == "Hum":
+            self.track["kind"] = "hum"; self.track["sound_b"] = ""
+            self.track.setdefault("hum_params", default_hum_params())
+            if self.track["sound"] not in HUMS:
+                self.track["sound"] = HUMS[0]
+        else:                                                 # Instrument (drum / pitched families)
+            if self.track["kind"] not in ("drum", "inst"):
+                self.track["kind"] = "inst"; self.track["sound"] = next(iter(INST_SPECS)); self.track["sound_b"] = ""
+        self._refresh_group_ui()
+        self.changed.emit()
+
+    def _on_instrument(self, idx):
+        if not (0 <= idx < len(self._combo_items)):
+            return
+        k, s, _ = self._combo_items[idx]
+        self.track["kind"] = k; self.track["sound"] = s; self.track["sound_b"] = ""
         self.changed.emit()
 
     def _on_note(self, key, combo):
@@ -1784,12 +1874,13 @@ class SeparationBoard(QWidget):
         return row
 
     def add_track(self):
-        self._n += 1; k, s, _ = self.items[0]
+        self._n += 1
         # a STABLE colour from a monotonic counter — removing a track never recolours the others
         color = theme.lane_color(self._color_seq); self._color_seq += 1
         tr = {"lane_id": uid("R"), "name": f"Track {self._n}", "color": color, "take": self._active_take,
-              "kind": k, "sound": s, "sound_b": "", "points": [], "visible": True,
-              "params": default_params(), "params_b": default_params(), "lo_note": 48, "hi_note": 72,
+              "kind": "drum", "sound": DRUMS[0], "sound_b": "", "points": [], "visible": True,
+              "params": default_params(), "params_b": default_params(),
+              "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72,
               "fx": default_fx()}
         self.tracks.append(tr)
         self._add_row(tr)
@@ -1972,7 +2063,8 @@ class SeparationBoard(QWidget):
         if not self.preview_note_cb or not (0 <= self.canvas.active < len(self.tracks)):
             return
         tr = self.tracks[self.canvas.active]
-        self.preview_note_cb(tr["kind"], tr["sound"], tr.get("params"), int(midi))
+        prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
+        self.preview_note_cb(tr["kind"], tr["sound"], prm, int(midi))
 
     def _preview_track(self, tr):
         btn = self._rows[self.tracks.index(tr)].b_prev if tr in self.tracks else self.b_prevall
@@ -2207,6 +2299,14 @@ class SeparationBoard(QWidget):
         lid = tr.setdefault("lane_id", uid("R"))
         beat_len = 60.0 / self.bpm; synth = (tr["kind"] == "synth")
         is_orig = (tr["kind"] == "original")   # play YOUR recorded sound (through the FX rack)
+        is_hum = (tr["kind"] == "hum")
+        # each voice family reads its OWN knob dict as sound_params (synth→params, hum→hum_params)
+        if synth:
+            sparams = dict(tr.get("params") or {})
+        elif is_hum:
+            sparams = dict(tr.get("hum_params") or {})
+        else:
+            sparams = {}
         # a whole SOUNDWAVE can be soloed/muted → every track bound to it inherits that at render
         tk = next((t for t in self.takes if t["id"] == tr.get("take")), None)
         lane = Lane(id=lid, src_master=lid, kind=tr["kind"], sound=tr["sound"],
@@ -2214,7 +2314,7 @@ class SeparationBoard(QWidget):
                     name=tr["name"], auto=True, has_original=True, play_original=is_orig,
                     muted=bool(tk and tk.get("muted")), solo=bool(tk and tk.get("solo")),
                     color=tr["color"].name() if hasattr(tr["color"], "name") else str(tr.get("color", "")),
-                    sound_params=dict(tr.get("params") or {}) if synth else {},
+                    sound_params=sparams,
                     sound_b_params=dict(tr.get("params_b") or {}) if synth else {},
                     lo_note=int(tr.get("lo_note", 48)), hi_note=int(tr.get("hi_note", 72)),
                     fx=dict(tr.get("fx") or {}) if is_orig else {})

@@ -895,6 +895,10 @@ class MainWindow(QMainWindow):
         that frequency; a drum/sample is RESAMPLED to that note (so a tom really toms up/down)."""
         if kind == "synth":
             v = synth.voice(sound or "sine", synth.midi_to_hz(midi), 0.5, 0.9, params or {})
+        elif kind == "hum":
+            v = synth.hum_voice(sound or "aah", synth.midi_to_hz(midi), 0.6, 0.9, params or {})
+        elif kind == "inst":
+            v = synth.inst_voice(sound or "piano", synth.midi_to_hz(midi), 0.6, 0.9, params or {})
         elif kind == "sample":
             samp = (self._samples or {}).get(sound)
             v = synth.sample_voice(samp["buf"], samp.get("base", 60), midi, 0.5, 0.9) if samp else None
