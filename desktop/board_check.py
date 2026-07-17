@@ -295,6 +295,37 @@ assert not any(p.get("tie") for p in dtr["points"]), "a drum auto-tied (must sta
 bd._delete_track(dtr); bd._delete_track(ntr); bd._set_mode("volume")
 print("NOTES LINE ok: pitched clicks tie into held bars + glides; right-click cuts; drums stay hits")
 
+# WAVE CONTROLS (#6): Solo/Mute a whole soundwave (its buttons hit-test + reach the lanes),
+# add-track binds under the selected wave, per-wave mode is remembered.
+cvw = bd.canvas
+# each wave's tracks inherit the wave's solo/mute at render
+bd.canvas.set_sel_take(1)
+s_r, m_r = cvw._take_sm_rects(1)
+assert cvw._hit_take_sm(s_r.center()) == (1, "solo") and cvw._hit_take_sm(m_r.center()) == (1, "mute"), \
+    "Solo/Mute buttons not hittable"
+tw1 = next(t for t in bd.tracks if t.get("take") == bd.takes[1]["id"])
+tw1.setdefault("points", []).append({"id": "wc1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0})
+tw0 = next(t for t in bd.tracks if t.get("take") == bd.takes[0]["id"] and t.get("points"))
+bd._on_take_flag(1, "mute")
+assert bd.takes[1]["muted"], "wave mute did not set on the take"
+lane_m, _ = bd._lane_events(tw1)
+assert lane_m.muted, "a muted wave's track did not inherit mute"
+bd._on_take_flag(1, "mute")                            # toggle back
+bd._on_take_flag(0, "solo")
+lane_s, _ = bd._lane_events(tw0)
+assert lane_s.solo, "a soloed wave's track did not inherit solo"
+bd._on_take_flag(0, "solo")
+# add-track binds to the selected wave
+bd.canvas.set_sel_take(1); bd.add_track()
+assert bd.tracks[-1]["take"] == bd.takes[1]["id"], "new track did not bind under the selected wave"
+# per-wave mode memory: wave 1 in notes, wave 0 in volume → selecting flips the view back
+bd._set_mode("notes"); assert bd.takes[1].get("mode") == "notes", "mode not remembered on the wave"
+bd.canvas.set_sel_take(0); bd._set_mode("volume")
+bd.canvas.set_sel_take(1); assert bd.canvas.mode == "notes", "selecting a wave did not restore its view"
+bd.canvas.set_sel_take(0); assert bd.canvas.mode == "volume", "selecting a wave did not restore its view"
+bd._delete_track(bd.tracks[-1]); bd._set_mode("volume")
+print("WAVE CONTROLS ok: soundwave Solo/Mute reach the lanes; add-track binds to the wave; mode remembered")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

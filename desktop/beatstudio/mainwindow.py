@@ -685,13 +685,14 @@ class MainWindow(QMainWindow):
             return
         if existing is None:
             self._insert_lane(lane, tr)
-        else:                                                # mutate in place (keep mute/solo/eq/order)
+        else:                                                # mutate in place (keep eq/order)
             existing.kind = lane.kind; existing.sound = lane.sound
             existing.sound_b = lane.sound_b; existing.name = lane.name
             existing.color = lane.color
             existing.sound_params = lane.sound_params; existing.sound_b_params = lane.sound_b_params
             existing.lo_note = lane.lo_note; existing.hi_note = lane.hi_note; existing.vol_pts = lane.vol_pts or existing.vol_pts
             existing.play_original = lane.play_original; existing.fx = lane.fx
+            existing.muted = lane.muted; existing.solo = lane.solo   # soundwave Solo/Mute is authoritative
         self.project.events += events
 
     def _insert_lane(self, lane, tr):

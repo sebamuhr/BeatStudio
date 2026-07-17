@@ -89,6 +89,8 @@ class CurveCanvas(QWidget):
     key_pressed = Signal(int)     # a piano key in the notes gutter was clicked → audition this MIDI note
     delete_take = Signal(int)     # the ✕ on a take (soundwave) was clicked → remove it + everything on it
     take_selected = Signal(int)   # a soundwave's checkbox was ticked → scope everything to that take
+    take_flag = Signal(int, str)  # a soundwave's Solo/Mute button was toggled (index, "solo"|"mute")
+    take_rename = Signal(int)     # double-clicked a soundwave's name → rename it
 
     def __init__(self, buf, sr, bpm, tracks, parent=None):
         super().__init__(parent)
@@ -136,6 +138,7 @@ class CurveCanvas(QWidget):
             b = b.astype(np.float32) if b is not None else np.zeros(self.sr, np.float32)
             self.takes.append({"id": tk["id"], "buf": b, "color": tk.get("color", take_color(len(self.takes))),
                                "name": tk.get("name", f"Take {len(self.takes)+1}"),
+                               "solo": bool(tk.get("solo", False)), "muted": bool(tk.get("muted", False)),
                                "gpeak": float(np.abs(b).max()) + 1e-9,
                                "pitch": self._ribbon_for(b),
                                "peaks": self._peaks_over(b, 0.0, 1.0, 1400)})
@@ -202,6 +205,44 @@ class CurveCanvas(QWidget):
         top, _, _, _ = self._band(i); _, x1 = self._xspan()
         return QRectF(x1 - 24, top + 5, 17, 17)
 
+    def _take_sm_rects(self, i):
+        """Solo / Mute button rects for take-row i (volume mode), left of the ✕."""
+        top, _, _, _ = self._band(i); _, x1 = self._xspan()
+        m = QRectF(x1 - 48, top + 5, 17, 17)
+        s = QRectF(x1 - 70, top + 5, 17, 17)
+        return s, m
+
+    def _hit_take_sm(self, pos):
+        """(take index, 'solo'|'mute') if a Solo/Mute button was clicked, else None. Volume mode."""
+        if self.mode == "notes":
+            return None
+        for i in range(len(self.takes)):
+            s, m = self._take_sm_rects(i)
+            if s.contains(pos):
+                return (i, "solo")
+            if m.contains(pos):
+                return (i, "mute")
+        return None
+
+    def _take_name_rect(self, i):
+        """The soundwave's name label (double-click to rename). Volume mode."""
+        top, _, _, _ = self._band(i); x0, _ = self._xspan()
+        return QRectF(x0 + 24, top + 2, 160, 14)
+
+    def mouseDoubleClickEvent(self, ev):
+        """Double-click a soundwave's name → rename it (both views)."""
+        pos = ev.position()
+        if self.mode == "notes":
+            if self._take_bar():
+                for i in range(len(self.takes)):
+                    if self._take_chip_rect(i).contains(pos):
+                        self.take_rename.emit(i); return
+        else:
+            for i in range(len(self.takes)):
+                if self._take_name_rect(i).contains(pos):
+                    self.take_rename.emit(i); return
+        super().mouseDoubleClickEvent(ev)
+
     def _take_bar(self):
         """The NOTES-mode take-picker strip: shown only when there's more than one soundwave."""
         return TAKE_BAR if len(self.takes) > 1 else 0.0
@@ -267,6 +308,15 @@ class CurveCanvas(QWidget):
         p.setPen(QPen(QColor("#ff8a8a"), 1.8)); m = 5.0
         p.drawLine(QPointF(r.left() + m, r.top() + m), QPointF(r.right() - m, r.bottom() - m))
         p.drawLine(QPointF(r.right() - m, r.top() + m), QPointF(r.left() + m, r.bottom() - m))
+
+    def _draw_sm(self, p, r, letter, on, col):
+        """A small Solo/Mute pill (lit in `col` when on) for a soundwave row."""
+        p.setBrush(QBrush(col if on else QColor(20, 20, 28, 220)))
+        p.setPen(QPen(col if on else QColor(255, 255, 255, 45), 1.2))
+        p.drawRoundedRect(r, 4, 4)
+        p.setFont(theme.sans(9, 700))
+        p.setPen(QPen(QColor("#12121a") if on else QColor(180, 180, 190), 1))
+        p.drawText(r, Qt.AlignCenter, letter)
 
     def _draw_take_chk(self, p, r, col, on):
         """A small checkbox in the take's own colour — ticked = this is the soundwave you're editing."""
@@ -496,6 +546,9 @@ class CurveCanvas(QWidget):
             p.setFont(theme.sans(9, 700 if sel else 600))
             p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 235 if sel else 150), 1))
             p.drawText(QRectF(x0 + 24, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
+            s_r, m_r = self._take_sm_rects(i)              # Solo / Mute the whole soundwave
+            self._draw_sm(p, s_r, "S", tk.get("solo"), QColor("#ffd24d"))
+            self._draw_sm(p, m_r, "M", tk.get("muted"), QColor("#ff7a7a"))
             self._draw_del_x(p, self._take_del_rect(i))    # ✕ delete this whole soundwave (+ its tracks)
 
         # bar + beat lines span every row (shifted by the grid offset)
@@ -911,6 +964,9 @@ class CurveCanvas(QWidget):
             di = self._hit_take_del(pos)
             if di is not None:
                 self.delete_take.emit(di); return
+            sm = self._hit_take_sm(pos)           # Solo / Mute the whole soundwave
+            if sm is not None:
+                self.take_flag.emit(sm[0], sm[1]); return
             si = self._hit_take_sel(pos)          # ticked a soundwave → work on THAT one
             if si is not None:
                 self.set_sel_take(si); return
@@ -1509,6 +1565,8 @@ class SeparationBoard(QWidget):
         self.canvas.key_pressed.connect(self._on_key_pressed)
         self.canvas.delete_take.connect(self._delete_take)
         self.canvas.take_selected.connect(self._on_take_selected)
+        self.canvas.take_flag.connect(self._on_take_flag)
+        self.canvas.take_rename.connect(self._on_take_rename)
         self._set_tool("pen")
         self._set_mode("volume")
 
@@ -1682,7 +1740,8 @@ class SeparationBoard(QWidget):
             t = copy.deepcopy({k: v for k, v in tr.items() if k != "color"})   # points/params/etc.
             t["color"] = tr["color"].name()
             tracks.append(t)
-        takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"].name(), "buf": tk["buf"]}
+        takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"].name(), "buf": tk["buf"],
+                  "solo": tk.get("solo", False), "muted": tk.get("muted", False)}
                  for tk in self.takes]                                          # buf by reference (cheap)
         return {"tracks": tracks, "takes": takes, "active_take": self._active_take,
                 "bpm": self.bpm, "n": self._n, "color_seq": self._color_seq,
@@ -1693,7 +1752,8 @@ class SeparationBoard(QWidget):
         for row in self._rows:
             self._list.removeWidget(row); row.deleteLater()
         self._rows = []
-        self.takes = [{"id": tk["id"], "buf": tk["buf"], "color": QColor(tk["color"]), "name": tk["name"]}
+        self.takes = [{"id": tk["id"], "buf": tk["buf"], "color": QColor(tk["color"]), "name": tk["name"],
+                       "solo": tk.get("solo", False), "muted": tk.get("muted", False)}
                       for tk in blob["takes"]]
         if self.takes:
             self.buf = self.takes[0]["buf"]
@@ -1763,6 +1823,30 @@ class SeparationBoard(QWidget):
         if 0 <= ti < len(self.takes):
             self._active_take = self.takes[ti]["id"]
             self._reconcile_active()
+            self._restore_take_mode()
+
+    def _on_take_flag(self, ti, field):
+        """Solo/Mute a whole soundwave → toggles it on the take, re-syncs render (which mutes/solos
+        every track bound to that take)."""
+        if not (0 <= ti < len(self.takes)):
+            return
+        key = "solo" if field == "solo" else "muted"
+        self.takes[ti][key] = not self.takes[ti].get(key)
+        self.canvas.set_takes(self.takes)              # carry the flag onto the canvas copy (for drawing)
+        self._sync_sel_take()
+        self.canvas.update()
+        self.tracks_changed.emit("")                   # render respects the new solo/mute
+
+    def _on_take_rename(self, ti):
+        """Double-click a soundwave name → rename the take (shown in both views)."""
+        if not (0 <= ti < len(self.takes)):
+            return
+        from PySide6.QtWidgets import QInputDialog
+        cur = self.takes[ti]["name"]
+        name, ok = QInputDialog.getText(self, "Rename soundwave", "Name:", text=cur)
+        if ok and name.strip():
+            self.takes[ti]["name"] = name.strip()
+            self.canvas.set_takes(self.takes); self.canvas.update()
 
     def _sync_sel_take(self):
         """Point the canvas at `_active_take` (the board owns the take id, the canvas an index).
@@ -1924,10 +2008,24 @@ class SeparationBoard(QWidget):
         n = len(self.tracks); self.count.setText(f"{n} track{'s' if n != 1 else ''}"); self.canvas.update()
 
     # ---- timing tools (Pen / Grid / Fit) ----
-    def _set_mode(self, name):
+    def _set_mode(self, name, remember=True):
         self.canvas.set_mode(name)
+        # each SOUNDWAVE remembers whether you were on its Volume or Notes view, so switching waves
+        # restores what you were doing on it (see _restore_take_mode).
+        if remember:
+            ti = self.canvas._active_band()
+            if 0 <= ti < len(self.takes):
+                self.takes[ti]["mode"] = self.canvas.mode
         for n, b in self._mode_btns.items():
             b.setStyleSheet(_TOOL_ON if n == self.canvas.mode else _TOOL_OFF)
+
+    def _restore_take_mode(self):
+        """Selecting a soundwave restores the Volume/Notes view you last used ON it."""
+        ti = self.canvas._active_band()
+        if 0 <= ti < len(self.takes):
+            m = self.takes[ti].get("mode")
+            if m and m != self.canvas.mode:
+                self._set_mode(m, remember=False)
 
     def _set_tool(self, name):
         self.canvas.tool = name
@@ -2109,9 +2207,12 @@ class SeparationBoard(QWidget):
         lid = tr.setdefault("lane_id", uid("R"))
         beat_len = 60.0 / self.bpm; synth = (tr["kind"] == "synth")
         is_orig = (tr["kind"] == "original")   # play YOUR recorded sound (through the FX rack)
+        # a whole SOUNDWAVE can be soloed/muted → every track bound to it inherits that at render
+        tk = next((t for t in self.takes if t["id"] == tr.get("take")), None)
         lane = Lane(id=lid, src_master=lid, kind=tr["kind"], sound=tr["sound"],
                     sound_b=(tr.get("sound_b", "") if synth else ""),
                     name=tr["name"], auto=True, has_original=True, play_original=is_orig,
+                    muted=bool(tk and tk.get("muted")), solo=bool(tk and tk.get("solo")),
                     color=tr["color"].name() if hasattr(tr["color"], "name") else str(tr.get("color", "")),
                     sound_params=dict(tr.get("params") or {}) if synth else {},
                     sound_b_params=dict(tr.get("params_b") or {}) if synth else {},
