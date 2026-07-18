@@ -55,19 +55,29 @@ Make each track own its soundwave, and move all per-wave controls into the sideb
 - Visual: shade the selected region on the card; handles to resize; a small "→ Studio" affordance.
 
 ## PHASE 3 — Studio = song arranger (clips: place / copy / paste / drag)
-- The Studio timeline becomes an **arrangement of CLIPS** (each = a sample region sent from the separator),
-  not a 1:1 mirror of board lanes. A clip carries its lane/voice + events, placed at a song position.
-- **Interactions:** drag a clip along the timeline, **copy/paste/duplicate**, delete; multiple copies of the
-  same sample at different positions. Snap to grid.
-- This is the biggest change — it replaces today's live 1:1 board→lane mirror with a clip model. Needs its
-  own detailed sub-plan before building (data model for clips, how edits to a source sample propagate to its
-  placed copies — link vs. independent, TBD with the user).
+**LINK MODEL (locked, user 2026-07-18): content is LINKED, length/position is PER-PLACEMENT.**
+- A Studio **clip = a REFERENCE to a separator sample** (its selected region), NOT a copy of the audio.
+  Fields: `sample_id` (→ the separator track/take), `start_beat`, `length_beats`.
+- **Content is linked (shared).** Editing a sample on the separator — its region, instrument, beats/notes —
+  **auto-updates every clip** that references it in the song (re-render the sample, all placements follow).
+  So the Studio never edits a sample's *content*; it only arranges.
+- **Length is per-placement, by LOOPING.** Drag a clip longer → the sample **repeats** to fill (sounds
+  continuous); drag shorter → it truncates (a partial loop is fine). NOT time-stretch — looping. Snap the
+  sample's own length to whole beats so repeats line up; draw faint **seam lines** where it loops.
+- **Position is per-placement.** Drag along the song timeline; **copy / paste / duplicate**; place the same
+  sample many times. Snap to grid.
+- **Variations = Duplicate on the SEPARATOR** (the existing tool). Want one section different? Duplicate the
+  sample on the separator → it's a new independent sample → place that. So there is **no per-clip "detach"
+  on the Studio** — exactly one place content changes (the separator), which is what keeps it un-confusing.
+- Data/impl: `model` gains a `Clip` (sample_id, start, length); `render` loops a sample's rendered buffer to
+  `length_beats`. This REPLACES today's live 1:1 board→lane mirror — needs a sub-plan (how the current
+  per-lane volume/notes surfaces map onto clips; migration of existing projects).
 
-## Open questions to confirm before Phase 2/3
-- When a sample is edited on the separator AFTER being placed in the Studio, do its placed copies update
-  (linked) or stay as they were (independent snapshots)?
-- Can one sample be placed many times (instances), and does per-instance editing detach it?
-- Does the Studio still show per-track volume automation / the notes view, or is it purely arrangement?
+## Open questions still to confirm before Phase 3
+- Loop seam when a sample isn't a whole number of beats — snap the sample length to the grid (recommended),
+  or allow ragged loops? (Recommend snap.)
+- Does the Studio arranger still expose per-track volume automation, or is loudness owned on the separator
+  sample and the Studio is purely position+length? (Leaning: loudness on the sample; Studio = arrangement.)
 
 ## Build order
 Phase 1 (this cycle) → Phase 2 → Phase 3 (after a sub-plan). Each phase: implement → extend `board_check`
