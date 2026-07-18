@@ -1,8 +1,27 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.34.0** (shown in the window title bar as
-`Beat Studio · v0.34.0`).
+continuing in a new chat.** Current version: **v0.35.0** (shown in the window title bar as
+`Beat Studio · v0.35.0`).
+
+## v0.35.0 — draggable panes · always-on Studio navigator · APC Key 25 mk2 MIDI control surface
+- **Draggable dividers.** The separator's track-list↔canvas divider (was a fixed 300px that cropped the
+  wave) and the Studio's header-column↔timeline divider are now **QSplitters** you can drag. The Studio one
+  splits (corner+headers | ruler+timeline) so both rows resize together and stay aligned; `TrackHeaders`/
+  `CornerBox` are no longer fixed-width (headers already reflow to width).
+- **Studio navigator is always visible** (no hover-to-open ⊞) — the grid miniature + draggable box, matching
+  the Separation Board's navigator (`minimap.py` `_expanded` always on).
+- **APC Key 25 mk2 (Akai) control surface — NEW, optional (`beatstudio/midi.py`).** USB class-compliant, so
+  ALSA/mido see it with no driver. `MidiController` auto-detects the APC (Keys + Control ports), polls input
+  on a QTimer (Qt main thread — no locks), and drives LED feedback (note-on: velocity=colour, channel=
+  behaviour, per the Akai protocol v1.1). Wired in `mainwindow`: **keybed → plays the selected track's
+  instrument**; **knob 1 → tempo, knobs 2–8 → the selected instrument's knob stack**; **Play/Stop/Record
+  buttons → transport (+ LEDs)**; **pads → audition + light up**. Degrades to nothing if absent; headless
+  tests skip the device (`QT_QPA_PLATFORM=offscreen`/`BEAT_NO_MIDI`). Dep: `python-rtmidi` (prebuilt wheel,
+  added to `requirements.txt`). Verified live: connects, lights pads, reads keys/knobs; the guts are in
+  `board_check` (MIDI check). **NEXT for MIDI:** map pads→arranger clips once the arranger exists; a
+  MIDI-learn UI; reflect solo/mute/record state on the button/pad LEDs. Bigger plan for the app direction:
+  `PLAN-v0.35-sample-factory-arranger.md` (separator = sample factory, Studio = song arranger) — still to build.
 
 ## ★ ROADMAP (user, 2026-07-17) — do in order, CONFIRM the big ones first
 

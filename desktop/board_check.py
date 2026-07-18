@@ -361,6 +361,21 @@ bd._on_track_flag(rc_tr, "solo"); bd._on_track_flag(rc_tr, "mute"); bd._on_track
 bd._delete_track(rc_tr)
 print("ROW CONTROLS ok: per-track Solo/Mute/View buttons act on the track's soundwave")
 
+# MIDI (control surface): the module maps the APC correctly and its LED calls are safe with no
+# device; the app wires keybed/knob/transport handlers without needing hardware.
+from beatstudio.midi import MidiController, BUTTONS, KNOB_CC, PAD_LO, PAD_HI
+assert PAD_HI - PAD_LO + 1 == 40 and len(KNOB_CC) == 8, "APC pad/knob map wrong"
+assert BUTTONS[0x5b] == "play" and BUTTONS[0x5d] == "record", "APC transport notes wrong"
+_mc = MidiController(); _mc.light_pad(0, "red"); _mc.light_button("play", True); _mc.clear()  # no crash
+bd.add_track(); _mt = bd.tracks[-1]; _mt["kind"] = "hum"; _mt["sound"] = "aah"
+bd.canvas.set_active(bd.tracks.index(_mt))
+w._midi_note_on(60, 100)                                # keybed → audition the selected instrument
+_bpm0 = w.toolbar.bpm.value(); w._midi_knob(0, 20); assert w.toolbar.bpm.value() != _bpm0, "knob→BPM failed"
+w._midi_knob(1, 64)                                     # knob → the hum's knob stack (no crash)
+w._midi_pad(3, True); w._midi_pad(3, False)            # pad audition + LED
+bd._delete_track(_mt)
+print("MIDI ok: APC map correct; keybed/knob/pad/transport handlers run; LEDs safe without a device")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

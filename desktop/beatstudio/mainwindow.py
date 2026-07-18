@@ -19,6 +19,7 @@ from . import synth
 from .synth import SR, click as synth_click
 from .settings import SettingsPanel
 from .recorder import Recorder
+from .midi import MidiController
 from .analysis import onsets_from, gate_lin
 from .extract import multi_extract, smart_extract, analyze_clusters, build_from_review
 from . import groove
@@ -213,6 +214,76 @@ class MainWindow(QMainWindow):
         self._metro_beat = 0
         if not self.engine.available:
             self._set_title("(no audio device: sudo apt install libportaudio2)")
+
+        # Optional hardware control surface (Akai APC Key 25 mk2). Degrades to nothing if absent.
+        self._midi = MidiController(self)
+        self._midi.note_on.connect(self._midi_note_on)
+        self._midi.button.connect(self._midi_button)
+        self._midi.knob.connect(self._midi_knob)
+        self._midi.pad.connect(self._midi_pad)
+        QTimer.singleShot(300, self._midi_connect)      # try after the UI is up
+
+    # ---- hardware control surface (APC Key 25) ----
+    def _midi_connect(self):
+        if os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("BEAT_NO_MIDI"):
+            return                                       # headless tests must not grab the device
+        if self._midi.start():
+            self._set_title("🎹 APC Key 25 connected — play the keys, twist the knobs")
+            self._midi.clear()
+            self._midi.light_button("play", False); self._midi.light_button("record", False)
+            for i in range(8):                          # a little welcome sweep on the bottom pad row
+                self._midi.light_pad(i, ["red", "orange", "yellow", "green", "cyan", "blue",
+                                         "purple", "magenta"][i])
+
+    def _midi_selected_track(self):
+        b = self._board
+        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
+            return None
+        return b.tracks[b.canvas.active]
+
+    def _midi_note_on(self, midi, vel):
+        """A key on the APC keybed → play the SELECTED track's instrument at that pitch."""
+        tr = self._midi_selected_track()
+        if tr is None:
+            return
+        prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
+        self._preview_note(tr["kind"], tr["sound"], prm, int(midi))
+
+    def _midi_button(self, name, pressed):
+        if name == "play":
+            self._toggle_play()
+            playing = self._timer.isActive()
+            self._midi.light_button("play", playing)
+        elif name == "stop_all":
+            self._stop(); self._midi.light_button("play", False)
+        elif name == "record":
+            self._toggle_master_record()
+
+    def _midi_knob(self, idx, value):
+        """Knob 1 → tempo (visible + testable); knobs 2.. → the selected instrument's knob stack."""
+        if idx == 0:
+            self.toolbar.bpm.setValue(40 + int(value / 127 * 260)); return
+        tr = self._midi_selected_track()
+        if tr is None:
+            return
+        from .synth import SYNTH_KNOBS, HUM_KNOBS
+        knobs = HUM_KNOBS if tr["kind"] == "hum" else (SYNTH_KNOBS if tr["kind"] == "synth" else None)
+        pkey = "hum_params" if tr["kind"] == "hum" else "params"
+        if not knobs or idx - 1 >= len(knobs):
+            return
+        key, _, mn, mx, _, scale = knobs[idx - 1]
+        tr.setdefault(pkey, {})[key] = (mn + (mx - mn) * value / 127) / scale
+        self._on_board_track_changed(tr.get("lane_id", ""))
+
+    def _midi_pad(self, index, pressed):
+        """A grid pad → audition the selected instrument up the scale; light it while held."""
+        if not pressed:
+            self._midi.light_pad(index, "off"); return
+        tr = self._midi_selected_track()
+        self._midi.light_pad(index, "white")
+        if tr is not None:
+            prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
+            self._preview_note(tr["kind"], tr["sound"], prm, 48 + index)
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
@@ -1111,6 +1182,8 @@ class MainWindow(QMainWindow):
         would otherwise keep the app alive)."""
         if self._board is not None:
             self._board.close(); self._board.deleteLater(); self._board = None
+        if getattr(self, "_midi", None) is not None:
+            self._midi.clear(); self._midi.stop()
         super().closeEvent(ev)
 
     def _on_loop_changed(self):
