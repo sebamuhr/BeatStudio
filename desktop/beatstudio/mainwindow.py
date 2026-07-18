@@ -56,7 +56,7 @@ _MYSOUNDS_DIR = os.path.join(_HERE, "mysounds")
 class CornerBox(QFrame):
     def __init__(self):
         super().__init__()
-        self.setFixedSize(theme.HEADER_W, theme.RULER_H)
+        self.setFixedHeight(theme.RULER_H)      # width follows the header column (draggable splitter)
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -86,16 +86,29 @@ class MainWindow(QMainWindow):
         self.toolbar = Toolbar(self.project)
 
         grid_host = QWidget()
-        g = QGridLayout(grid_host); g.setContentsMargins(16, 8, 16, 16); g.setSpacing(0)
+        g = QVBoxLayout(grid_host); g.setContentsMargins(16, 8, 16, 16); g.setSpacing(0)
         self.timeline = TimelineView(self.project)
         self.ruler = Ruler(self.timeline)
         self.headers = TrackHeaders(self.project, self.timeline)
-        g.addWidget(CornerBox(), 0, 0)
-        g.addWidget(self.ruler, 0, 1)
-        g.addWidget(self.headers, 1, 0)
-        g.addWidget(self.timeline, 1, 1)
-        g.setColumnStretch(1, 1); g.setRowStretch(1, 1)
-        # panel frame around the grid
+        self.headers.setMinimumWidth(170)              # was a fixed 300 — now the divider is draggable
+        # LEFT pane = corner + track headers (stacked); RIGHT pane = ruler + timeline (stacked). A
+        # DRAGGABLE horizontal splitter between them resizes BOTH rows together, so the ruler stays
+        # aligned with the timeline and the corner with the headers.
+        left = QWidget(); lv = QVBoxLayout(left); lv.setContentsMargins(0, 0, 0, 0); lv.setSpacing(0)
+        self._corner = CornerBox(); self._corner.setMinimumWidth(0)
+        lv.addWidget(self._corner); lv.addWidget(self.headers, 1)
+        right = QWidget(); rv = QVBoxLayout(right); rv.setContentsMargins(0, 0, 0, 0); rv.setSpacing(0)
+        rv.addWidget(self.ruler); rv.addWidget(self.timeline, 1)
+        self.timeline.setMinimumWidth(320)
+        self._grid_split = QSplitter(Qt.Horizontal)
+        self._grid_split.addWidget(left); self._grid_split.addWidget(right)
+        self._grid_split.setStretchFactor(0, 0); self._grid_split.setStretchFactor(1, 1)
+        self._grid_split.setCollapsible(0, False); self._grid_split.setCollapsible(1, False)
+        self._grid_split.setHandleWidth(7); self._grid_split.setSizes([300, 1000])
+        self._grid_split.setStyleSheet(
+            "QSplitter::handle{background:#14141c;border-left:1px solid #262630;border-right:1px solid #262630;}"
+            "QSplitter::handle:hover{background:#242430;}")
+        g.addWidget(self._grid_split, 1)
         grid_host.setStyleSheet("")
         self._grid_host = grid_host
         # The Studio pane = its toolbar + grid kept TOGETHER, so in one-screen mode the toolbar

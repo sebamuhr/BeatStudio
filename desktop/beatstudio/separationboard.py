@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QWidget, QComboBox, QScrollArea, QFrame, QLineEdit, QSizePolicy,
-                               QSpinBox, QSlider, QToolTip, QGraphicsOpacityEffect)
+                               QSpinBox, QSlider, QToolTip, QGraphicsOpacityEffect, QSplitter)
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QElapsedTimer, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 
@@ -1675,7 +1675,6 @@ class SeparationBoard(QWidget):
         top.addWidget(self.b_full)
         root.addLayout(top)
 
-        mid = QHBoxLayout(); mid.setSpacing(12)
         self.canvas = CurveCanvas(self.buf, sr, self.bpm, self.tracks)
         self.canvas.set_takes(self.takes)                # share the board's take rows (matching ids)
         self.canvas.active_changed.connect(self._on_canvas_active)
@@ -1700,10 +1699,20 @@ class SeparationBoard(QWidget):
         self._list_host = QWidget(); self._list = QVBoxLayout(self._list_host)
         self._list.setSpacing(8); self._list.setContentsMargins(0, 0, 4, 0); self._list.addStretch(1)
         scroll.setWidget(self._list_host); side.addWidget(scroll, 1)
-        sw = QWidget(); sw.setLayout(side); sw.setFixedWidth(300)
-        mid.addWidget(sw)                 # track list on the LEFT — every menu in the app is left-side
-        mid.addWidget(self.canvas, 1)
-        root.addLayout(mid, 1)
+        sw = QWidget(); sw.setLayout(side); sw.setMinimumWidth(210); sw.setMaximumWidth(620)
+        # DRAGGABLE divider between the track list and the soundwave canvas (was a fixed 300px, which
+        # cropped the wave). Grab the handle to widen either side.
+        self._mid_split = QSplitter(Qt.Horizontal)
+        self.canvas.setMinimumWidth(320)
+        self._mid_split.addWidget(sw)                  # track list on the LEFT — every menu is left-side
+        self._mid_split.addWidget(self.canvas)
+        self._mid_split.setStretchFactor(0, 0); self._mid_split.setStretchFactor(1, 1)
+        self._mid_split.setCollapsible(0, False); self._mid_split.setCollapsible(1, False)
+        self._mid_split.setHandleWidth(8); self._mid_split.setSizes([300, 900])
+        self._mid_split.setStyleSheet(
+            "QSplitter::handle{background:#1a1a24;border-left:1px solid #2a2a36;border-right:1px solid #2a2a36;}"
+            "QSplitter::handle:hover{background:#2a2a3a;}")
+        root.addWidget(self._mid_split, 1)
 
         btns = QHBoxLayout()
         self.count = QLabel("0 tracks"); self.count.setStyleSheet("color:#8a8a99;font-size:12px;")

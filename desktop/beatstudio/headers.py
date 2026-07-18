@@ -24,7 +24,7 @@ class TrackHeaders(QWidget):
         self.project = project
         self.timeline = timeline
         self.recording_lane = None      # lane id currently recording (row glows red)
-        self.setFixedWidth(theme.HEADER_W)
+        self.setMinimumWidth(170)       # width now driven by the draggable splitter (was fixed 300)
         self._hit = []      # list of (QRectF, lane_id, action)
 
     def y_offset(self) -> int:
