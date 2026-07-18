@@ -349,6 +349,18 @@ assert float(np.abs(_out).sum()) > 0, "hum/instrument rendered silent"
 bd._delete_track(itr); bd._delete_track(htr)
 print(f"INSTRUMENTS ok: {len(_syn.HUMS)} hums + {len(_syn.INSTS)} instruments; group selector + voices render")
 
+# ROW CONTROLS (v0.35 phase 1a): each separator track row has Solo/Mute/View buttons that act on
+# the track's soundwave (Studio-header style, moved off the canvas onto the row).
+bd.canvas.set_sel_take(0); bd.add_track(); rc_tr = bd.tracks[-1]; rc_row = bd._rows[-1]
+rc_take = next(i for i, t in enumerate(bd.takes) if t["id"] == rc_tr["take"])
+bd._on_track_flag(rc_tr, "solo"); assert bd.takes[rc_take]["solo"], "row Solo did not reach the soundwave"
+bd._on_track_flag(rc_tr, "mute"); assert bd.takes[rc_take]["muted"], "row Mute did not reach the soundwave"
+bd._on_track_flag(rc_tr, "notes"); assert bd.takes[rc_take].get("mode") == "notes", "row View did not set Notes"
+assert rc_row.b_vn.text() == "♪", "row View button did not reflect Notes"
+bd._on_track_flag(rc_tr, "solo"); bd._on_track_flag(rc_tr, "mute"); bd._on_track_flag(rc_tr, "volume")
+bd._delete_track(rc_tr)
+print("ROW CONTROLS ok: per-track Solo/Mute/View buttons act on the track's soundwave")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

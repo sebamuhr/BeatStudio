@@ -1276,6 +1276,7 @@ class TrackRow(QFrame):
     preview = Signal(object)                 # ▶ play what's DRAWN for this track
     preview_sound = Signal(str, object, object)   # ▶ play one sound (preset, params, button) — Base/Morph
     delete = Signal(object)
+    flag = Signal(object, str)               # per-track control: (track, "solo"|"mute"|"volume"|"notes")
 
     def __init__(self, track, items):
         super().__init__()
@@ -1293,14 +1294,24 @@ class TrackRow(QFrame):
         self.name = QLineEdit(track["name"])
         self.name.setStyleSheet("QLineEdit{background:transparent;border:none;color:#e2e2ea;font-size:13px;font-weight:600;}")
         self.name.textChanged.connect(self._on_name)
-        self.eye = QPushButton("👁"); self.eye.setFixedSize(26, 26); self.eye.setCursor(Qt.PointingHandCursor)
-        self.eye.setToolTip("Show / hide"); self.eye.clicked.connect(self._toggle_vis)
-        self.b_del = QPushButton("✕"); self.b_del.setFixedSize(26, 26); self.b_del.setCursor(Qt.PointingHandCursor)
-        self.b_del.setToolTip("Delete track"); self.b_del.clicked.connect(lambda: self.delete.emit(self.track))
-        for b in (self.eye, self.b_del):
+        # per-track controls (like the Studio header): Solo · Mute · Volume/Notes view
+        self.b_solo = QPushButton("S"); self.b_mute = QPushButton("M"); self.b_vn = QPushButton("♪")
+        self.b_solo.setToolTip("Solo this track"); self.b_mute.setToolTip("Mute this track")
+        self.b_vn.setToolTip("This track's view: Volume ▁ / Notes ♪")
+        self.b_solo.clicked.connect(lambda: self.flag.emit(self.track, "solo"))
+        self.b_mute.clicked.connect(lambda: self.flag.emit(self.track, "mute"))
+        self.b_vn.clicked.connect(self._toggle_vn)
+        self.eye = QPushButton("👁"); self.eye.setToolTip("Show / hide"); self.eye.clicked.connect(self._toggle_vis)
+        self.b_del = QPushButton("✕"); self.b_del.setToolTip("Delete track")
+        self.b_del.clicked.connect(lambda: self.delete.emit(self.track))
+        for b in (self.b_solo, self.b_mute, self.b_vn, self.eye, self.b_del):
+            b.setFixedSize(26, 26); b.setCursor(Qt.PointingHandCursor)
             b.setStyleSheet("QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:6px;color:#c0c0cc;font-size:12px;}QPushButton:hover{background:#1e1e28;}")
-        top.addWidget(self.swatch); top.addWidget(self.name, 1); top.addWidget(self.eye); top.addWidget(self.b_del)
+        top.addWidget(self.swatch); top.addWidget(self.name, 1)
+        top.addWidget(self.b_solo); top.addWidget(self.b_mute); top.addWidget(self.b_vn)
+        top.addWidget(self.eye); top.addWidget(self.b_del)
         lay.addLayout(top)
+        self.refresh_flags()
 
         # TOP-LEVEL group selector: Original · Hum · Synth · Instrument
         grp = QHBoxLayout(); grp.setSpacing(4)
@@ -1467,6 +1478,27 @@ class TrackRow(QFrame):
 
     def mousePressEvent(self, ev):
         self.activated.emit(self.track); super().mousePressEvent(ev)
+
+    def _toggle_vn(self):
+        # ask the board to flip THIS track's soundwave between Volume and Notes
+        self.flag.emit(self.track, "notes" if self._vn_mode() != "notes" else "volume")
+
+    def _vn_mode(self):
+        """This track's current view mode ('volume'/'notes'), read from the board via a callback."""
+        fn = getattr(self, "_flags_fn", None)
+        return (fn(self.track) or {}).get("mode", "volume") if fn else "volume"
+
+    def refresh_flags(self):
+        """Repaint Solo/Mute/V-N to match the track's soundwave state (board sets `_flags_fn`)."""
+        fn = getattr(self, "_flags_fn", None)
+        st = (fn(self.track) if fn else None) or {}
+        on = "QPushButton{background:%s;border:1px solid %s;border-radius:6px;color:#12121a;font-weight:700;font-size:12px;}"
+        off = "QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:6px;color:#c0c0cc;font-size:12px;}QPushButton:hover{background:#1e1e28;}"
+        self.b_solo.setStyleSheet(on % ("#ffd24d", "#ffd24d") if st.get("solo") else off)
+        self.b_mute.setStyleSheet(on % ("#ff7a7a", "#ff7a7a") if st.get("muted") else off)
+        notes = st.get("mode") == "notes"
+        self.b_vn.setText("♪" if notes else "▁")
+        self.b_vn.setStyleSheet(on % ("#c0a8ff", "#c0a8ff") if notes else off)
 
     def _on_name(self, txt):
         self.track["name"] = txt; self.changed.emit()
@@ -1867,11 +1899,39 @@ class SeparationBoard(QWidget):
     def _add_row(self, tr):
         """Build a TrackRow for `tr` and wire its signals (shared by add_track + restore)."""
         row = TrackRow(tr, self.items)
+        row._flags_fn = self._track_flags               # so the row can show Solo/Mute/V-N state
         row.activated.connect(self._activate_track); row.changed.connect(lambda t=tr: self._on_row_changed(t))
         row.preview.connect(self._preview_track); row.delete.connect(self._delete_track)
         row.preview_sound.connect(self._preview_sound)
+        row.flag.connect(self._on_track_flag)
+        row.refresh_flags()
         self._rows.append(row); self._list.insertWidget(self._list.count() - 1, row)
         return row
+
+    def _refresh_row_flags(self):
+        for row in getattr(self, "_rows", []):
+            row.refresh_flags()
+
+    def _track_flags(self, tr):
+        """The soundwave state a track's row shows: {solo, muted, mode} from its bound take."""
+        tk = next((t for t in self.takes if t["id"] == tr.get("take")), None)
+        if not tk:
+            return {}
+        return {"solo": tk.get("solo"), "muted": tk.get("muted"), "mode": tk.get("mode", "volume")}
+
+    def _on_track_flag(self, tr, field):
+        """A per-track Solo/Mute/View button (in the sidebar row) — acts on the track's soundwave."""
+        ti = next((i for i, t in enumerate(self.takes) if t["id"] == tr.get("take")), None)
+        if ti is None:
+            return
+        if field in ("solo", "mute"):
+            self._on_take_flag(ti, field)
+        else:                                            # volume / notes: focus this track + set its view
+            self._activate_track(tr)
+            self.takes[ti]["mode"] = field
+            self._set_mode(field, remember=False)
+        for row in self._rows:
+            row.refresh_flags()
 
     def add_track(self):
         self._n += 1
@@ -1926,6 +1986,7 @@ class SeparationBoard(QWidget):
         self.canvas.set_takes(self.takes)              # carry the flag onto the canvas copy (for drawing)
         self._sync_sel_take()
         self.canvas.update()
+        self._refresh_row_flags()
         self.tracks_changed.emit("")                   # render respects the new solo/mute
 
     def _on_take_rename(self, ti):
@@ -2110,6 +2171,7 @@ class SeparationBoard(QWidget):
                 self.takes[ti]["mode"] = self.canvas.mode
         for n, b in self._mode_btns.items():
             b.setStyleSheet(_TOOL_ON if n == self.canvas.mode else _TOOL_OFF)
+        self._refresh_row_flags()
 
     def _restore_take_mode(self):
         """Selecting a soundwave restores the Volume/Notes view you last used ON it."""
