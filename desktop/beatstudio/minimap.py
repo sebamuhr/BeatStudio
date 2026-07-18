@@ -17,12 +17,11 @@ class Minimap(QWidget):
     def __init__(self, timeline):
         super().__init__(timeline)
         self.timeline = timeline
-        self._expanded = False
+        self._expanded = True        # ALWAYS visible now (like the Separation Board navigator) — no hover
         self._dragging = False
         self._loc = None            # absolute (scene_x, scene_y) while/after dragging
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
-        self.resize(34, 34)
         self.zoombar = None          # set by MainWindow so we can keep it stacked above us
         timeline.resized.connect(self.reposition)
         timeline.scrolled.connect(self._on_scroll)
@@ -40,10 +39,7 @@ class Minimap(QWidget):
 
     def reposition(self):
         vp = self.timeline.viewport()
-        if self._expanded:
-            w, h, _ = self._map_size(); W, H = w + 2, h + 2
-        else:
-            W, H = 34, 34
+        w, h, _ = self._map_size(); W, H = w + 2, h + 2
         self.resize(int(W), int(H))
         self.move(int(vp.width() - W - MARGIN), int(vp.height() - H - MARGIN))
         if self.zoombar is not None:
@@ -68,44 +64,16 @@ class Minimap(QWidget):
         bx = min(max(0.0, bx), w - bw); by = min(max(0.0, by), h - bh)
         return QRectF(bx, by, bw, bh)
 
-    # ---- hover expand/collapse ----
-    def enterEvent(self, _):
-        self._expanded = True
-        self.reposition()
-        self._push_mirror()
-        self.update()
-
-    def leaveEvent(self, _):
-        if self._dragging:
-            return
-        self._expanded = False
-        self.timeline.mirror = None
-        self.timeline.viewport().update()
-        self.reposition()
-        self.update()
-
     def _on_scroll(self):
         if self._dragging:
             return
         self._loc = None            # follow the view when scrolled by other means
-        if self._expanded:
-            self._push_mirror()
-            self.update()
-
-    def _push_mirror(self):
-        # The board navigator has no on-grid "mirror" marker — keep the two consistent (box only).
-        self.timeline.mirror = None
-        self.timeline.viewport().update()
+        self.update()
 
     # ---- paint ----
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        if not self._expanded:
-            p.setBrush(QColor(16, 16, 22, 180)); p.setPen(QPen(theme.BORDER_2, 1))
-            p.drawRoundedRect(QRectF(0.5, 0.5, self.width() - 1, self.height() - 1), 9, 9)
-            p.setPen(QColor("#7a7a88")); p.drawText(self.rect(), Qt.AlignCenter, "⊞")
-            return
         w, h, scale = self._map_size()
         p.fillRect(QRectF(0, 0, w, h), QColor(13, 13, 18, 245))
         proj = self.timeline.project; laneH = theme.LANE_H; ppb = self.timeline.ppb
@@ -131,9 +99,8 @@ class Minimap(QWidget):
 
     # ---- drag ----
     def mousePressEvent(self, ev):
-        if self._expanded:
-            self._dragging = True
-            self._go(ev.position())
+        self._dragging = True
+        self._go(ev.position())
 
     def mouseMoveEvent(self, ev):
         if self._dragging:
@@ -141,8 +108,6 @@ class Minimap(QWidget):
 
     def mouseReleaseEvent(self, ev):
         self._dragging = False
-        if not self.rect().contains(ev.position().toPoint()):
-            self.leaveEvent(None)
         self.update()
 
     def _go(self, pos):
