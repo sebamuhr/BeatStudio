@@ -223,67 +223,97 @@ class MainWindow(QMainWindow):
         self._midi.pad.connect(self._midi_pad)
         QTimer.singleShot(300, self._midi_connect)      # try after the UI is up
 
-    # ---- hardware control surface (APC Key 25) ----
+    # ---- hardware control surface (APC Key 25 mk2) ----
+    # The 5x8 pad grid maps ONE TRACK PER COLUMN (8 columns = the first 8 tracks). The 5 pads UP a
+    # column play that track's instrument at 5 pitches (a scale ladder), so you can play it live.
+    _PAD_COLS = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "magenta"]
+    _PAD_LADDER = [0, 2, 4, 7, 9]        # semitones for rows 0(bottom)..4(top): a major-pentatonic ladder
+
     def _midi_connect(self):
         if os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("BEAT_NO_MIDI"):
             return                                       # headless tests must not grab the device
         if self._midi.start():
-            self._set_title("🎹 APC Key 25 connected — play the keys, twist the knobs")
-            self._midi.clear()
-            self._midi.light_button("play", False); self._midi.light_button("record", False)
-            for i in range(8):                          # a little welcome sweep on the bottom pad row
-                self._midi.light_pad(i, ["red", "orange", "yellow", "green", "cyan", "blue",
-                                         "purple", "magenta"][i])
+            self._set_title("🎹 APC Key 25 — 1 track per pad column, play up each column")
+            self._midi_relight()
 
-    def _midi_selected_track(self):
+    def _midi_relight(self):
+        """Light the grid: each column = a track (its colour); columns with no track are dark. The
+        selected track's column pulses; the track buttons under live columns are lit."""
+        if not getattr(self, "_midi", None) or not self._midi.connected:
+            return
+        from .midi import LED_SOLID, LED_PULSE
         b = self._board
-        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
-            return None
-        return b.tracks[b.canvas.active]
+        ntr = len(b.tracks) if b is not None else 0
+        active = b.canvas.active if b is not None else -1
+        for idx in range(40):
+            col = idx % 8
+            if col < ntr:
+                self._midi.light_pad(idx, self._PAD_COLS[col],
+                                     LED_PULSE if col == active else LED_SOLID)
+            else:
+                self._midi.light_pad(idx, "off")
+        for i in range(8):
+            self._midi.light_button(f"track{i + 1}", i < ntr)
+        self._midi.light_button("play", self._timer.isActive())
 
     def _midi_note_on(self, midi, vel):
         """A key on the APC keybed → play the SELECTED track's instrument at that pitch."""
-        tr = self._midi_selected_track()
-        if tr is None:
+        b = self._board
+        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
             return
+        tr = b.tracks[b.canvas.active]
         prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
         self._preview_note(tr["kind"], tr["sound"], prm, int(midi))
 
     def _midi_button(self, name, pressed):
         if name == "play":
-            self._toggle_play()
-            playing = self._timer.isActive()
-            self._midi.light_button("play", playing)
+            self._toggle_play(); self._midi.light_button("play", self._timer.isActive())
         elif name == "stop_all":
             self._stop(); self._midi.light_button("play", False)
         elif name == "record":
             self._toggle_master_record()
+        elif name.startswith("track"):                   # a Track button = select that column's track
+            i = int(name[5:]) - 1
+            b = self._board
+            if b is not None and 0 <= i < len(b.tracks):
+                b.canvas.set_active(i)                    # active_changed → _midi_relight
 
     def _midi_knob(self, idx, value):
-        """Knob 1 → tempo (visible + testable); knobs 2.. → the selected instrument's knob stack."""
-        if idx == 0:
-            self.toolbar.bpm.setValue(40 + int(value / 127 * 260)); return
-        tr = self._midi_selected_track()
-        if tr is None:
+        """The 8 knobs drive the SELECTED instrument's knob stack (hum/synth). No tempo mapping —
+        that was rescaling the whole grid. Drums/Original have no knobs, so knobs do nothing there."""
+        b = self._board
+        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
             return
+        tr = b.tracks[b.canvas.active]
         from .synth import SYNTH_KNOBS, HUM_KNOBS
         knobs = HUM_KNOBS if tr["kind"] == "hum" else (SYNTH_KNOBS if tr["kind"] == "synth" else None)
         pkey = "hum_params" if tr["kind"] == "hum" else "params"
-        if not knobs or idx - 1 >= len(knobs):
+        if not knobs or idx >= len(knobs):
             return
-        key, _, mn, mx, _, scale = knobs[idx - 1]
+        key, _, mn, mx, _, scale = knobs[idx]
         tr.setdefault(pkey, {})[key] = (mn + (mx - mn) * value / 127) / scale
         self._on_board_track_changed(tr.get("lane_id", ""))
 
     def _midi_pad(self, index, pressed):
-        """A grid pad → audition the selected instrument up the scale; light it while held."""
-        if not pressed:
-            self._midi.light_pad(index, "off"); return
-        tr = self._midi_selected_track()
-        self._midi.light_pad(index, "white")
-        if tr is not None:
-            prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
-            self._preview_note(tr["kind"], tr["sound"], prm, 48 + index)
+        """Pad (col=track, row=pitch): play that track's instrument at the row's pitch; flash it."""
+        b = self._board
+        col = index % 8; row = index // 8
+        if not pressed:                                  # restore the pad's column colour
+            if b is not None and col < len(b.tracks):
+                from .midi import LED_SOLID, LED_PULSE
+                beh = LED_PULSE if col == b.canvas.active else LED_SOLID
+                self._midi.light_pad(index, self._PAD_COLS[col], beh)
+            else:
+                self._midi.light_pad(index, "off")
+            return
+        if b is None or col >= len(b.tracks):
+            return
+        tr = b.tracks[col]
+        if col != b.canvas.active:
+            b.canvas.set_active(col)                      # focus the column's track (relights grid)
+        self._midi.light_pad(index, "white")             # flash the struck pad
+        prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
+        self._preview_note(tr["kind"], tr["sound"], prm, 48 + self._PAD_LADDER[min(row, 4)])
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
@@ -644,7 +674,11 @@ class MainWindow(QMainWindow):
         board.bpm_changed.connect(self._on_board_bpm)
         board.point_selected.connect(self._on_board_point_selected)
         board.playhead_moved.connect(self._on_board_playhead)
+        # keep the APC pad grid in sync (each column = a track; selected column pulses)
+        board.tracks_changed.connect(lambda _="": self._midi_relight())
+        board.canvas.active_changed.connect(lambda _=0: self._midi_relight())
         self._board = board
+        self._midi_relight()
         self._resync_all_board()
         if self._one_screen:
             self._dock_board()

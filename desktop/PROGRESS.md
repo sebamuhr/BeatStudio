@@ -4,6 +4,21 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.36.1 — APC grid remap: 1 track per pad column · fixed the disruptive knob/pad behaviour
+User feedback on the raw v0.35 MIDI wiring: "a lot of lights that turn off when clicked, only a few
+buttons work, one knob works but makes the grid fail." Fixes + the user's grid idea:
+- **Knobs no longer touch tempo.** Knob 1→BPM was rescaling the whole grid ("makes the grid fail").
+  Now all 8 knobs drive ONLY the selected instrument's knob stack (hum/synth); drums/original have none.
+- **Pad grid = ONE TRACK PER COLUMN** (`mainwindow._midi_pad`/`_midi_relight`). The 8 columns map to the
+  first 8 tracks (lit in a distinct colour each); the 5 pads UP a column play that track's instrument at a
+  scale-ladder of pitches (`_PAD_LADDER`), so you play a track live. The **selected track's column pulses**;
+  columns with no track are dark (fixes "lots of lights"). Pressing a pad plays + flashes, then restores its
+  colour (fixes "turn off when clicked"). **Track buttons under the columns select that column's track.**
+  Grid relights on track add/delete and selection (`tracks_changed`/`active_changed` → `_midi_relight`).
+- **OPEN (ask user):** does a "variation" down a column mean a pitch (current) or a different SOUND /
+  duplicate per row? And should each column's pad colour match the track CARD colour (needs a hex→APC
+  palette map) instead of the fixed 8-colour set? Also map the Scene buttons + more transport.
+
 ## v0.36.0 — 1 track = 1 soundwave · per-track Record + Duplicate · Record main/secondary removed
 Phase 1 of the sample-factory plan (`PLAN-v0.35-sample-factory-arranger.md`). The separator is now
 per-track soundwaves; each track row carries its own controls (matches the Studio header).

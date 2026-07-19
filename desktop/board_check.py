@@ -371,11 +371,14 @@ _mc = MidiController(); _mc.light_pad(0, "red"); _mc.light_button("play", True);
 bd.add_track(); _mt = bd.tracks[-1]; _mt["kind"] = "hum"; _mt["sound"] = "aah"
 bd.canvas.set_active(bd.tracks.index(_mt))
 w._midi_note_on(60, 100)                                # keybed → audition the selected instrument
-_bpm0 = w.toolbar.bpm.value(); w._midi_knob(0, 20); assert w.toolbar.bpm.value() != _bpm0, "knob→BPM failed"
-w._midi_knob(1, 64)                                     # knob → the hum's knob stack (no crash)
-w._midi_pad(3, True); w._midi_pad(3, False)            # pad audition + LED
+_p0 = dict(_mt["hum_params"]); w._midi_knob(0, 20)     # knobs drive the instrument's knob stack (NOT tempo)
+assert _mt["hum_params"] != _p0, "knob did not drive the selected instrument's knob stack"
+_bpm0 = w.toolbar.bpm.value(); w._midi_knob(3, 100)
+assert w.toolbar.bpm.value() == _bpm0, "knob must NOT change tempo any more (that broke the grid)"
+w._midi_pad(0, True); w._midi_pad(0, False)            # pad col 0 = tracks[0]: play + light (no crash)
+w._midi_button("track1", True)                          # a Track button selects that column's track
 bd._delete_track(_mt)
-print("MIDI ok: APC map correct; keybed/knob/pad/transport handlers run; LEDs safe without a device")
+print("MIDI ok: 1-track-per-column grid; knobs drive the instrument (not tempo); handlers/LEDs safe")
 
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
