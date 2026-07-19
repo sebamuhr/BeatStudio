@@ -4,6 +4,19 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.40.0 — time signature + beat snap (so you can size samples to the bar)
+User: can't see the meter, so can't tell how long a sample should be; and volume beats didn't snap.
+- **Time-signature selector** on the board toolbar (`2/4 … 7/4`, default 4/4) → `canvas.beats_per_bar` drives
+  the BAR lines in both Volume and Notes, so you can see the meter and size loops to whole bars. Round-trips
+  in snapshot.
+- **Snap for VOLUME beats** (`⌗ Snap`, on by default, toggleable). Placing/dragging a beat snaps to the drawn
+  grid (`_gsnap`, 1/16 of a beat) so beats line up and samples fit the bar. (Notes mode already snapped via
+  `_snap_t`.) Verified: 0.137→0.125; snap-off places freely.
+- board_check **SNAP/TIMESIG** check; 33 checks green.
+- NOTE: this is board-side (where you draw + size loops). The Studio ruler still draws 4/4 bars — unify if
+  needed. A natural follow-up (raised earlier): quantize loop REGIONS to whole bars so different loops stay
+  phase-locked.
+
 ## v0.39.2 — MIX knobs actually DO something on a live loop (instant volume/balance)
 The numbers updated (v0.39.1) but a live pad loop still didn't audibly change: Volume/Balance felt dead and
 Balance couldn't work at all (mono).

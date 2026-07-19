@@ -143,6 +143,8 @@ class CurveCanvas(QWidget):
         self.playhead = None                      # take-fraction 0..1, or None
         self.tool = "pen"                          # pen | grid (tempo) | fit (audio) | loop (sample region)
         self._loop_drag = None                     # take-fraction where a Loop drag started
+        self.beats_per_bar = 4                     # time signature numerator (bar = N beats)
+        self.snap = True                           # snap placed/moved VOLUME beats to the grid
         self._grid_grab = None                     # (grabbed beat number) while STRETCHING the grid
         self.grid_off = 0.0                        # grid phase offset in SECONDS (moves the grid sideways)
         self._grid_pan = None                      # (start-x, start-offset) while MOVING the grid
@@ -487,6 +489,18 @@ class CurveCanvas(QWidget):
         sec = round((t * dur - self.grid_off) / sub) * sub + self.grid_off
         return min(1.0, max(0.0, sec / dur))
 
+    def _gsnap(self, t, div=4):
+        """Snap a take-fraction to the drawn beat grid (1/div of a beat = 16th notes by default), so
+        VOLUME beats land on the grid and loops fit the bar. Bypassed when `snap` is off."""
+        if not self.snap:
+            return t
+        dur = len(self.buf) / self.sr
+        if dur <= 0:
+            return t
+        sub = (60.0 / self.bpm) / max(1, div)
+        sec = round((t * dur - self.grid_off) / sub) * sub + self.grid_off
+        return min(1.0, max(0.0, sec / dur))
+
     def _lane_h(self):
         y0, y1 = self._notes_plot()
         return (y1 - y0) / max(1, (self.note_hi - self.note_lo))
@@ -582,7 +596,7 @@ class CurveCanvas(QWidget):
 
         # bar + beat lines span every row (shifted by the grid offset)
         if dur:
-            step = beat_len * 4
+            step = beat_len * self.beats_per_bar         # a bar = time-signature beats
             bar = int((self.view0 * dur - self.grid_off) / step) - 1
             while True:
                 tf = (bar * step + self.grid_off) / dur
@@ -760,7 +774,7 @@ class CurveCanvas(QWidget):
                     break
                 if self.view0 <= tf and tf >= 0:
                     x = self._to_px_t(tf)
-                    a = 55 if (k % 16 == 0) else (30 if (k % 4 == 0) else 12)
+                    a = 55 if (k % (self.beats_per_bar * 4) == 0) else (30 if (k % 4 == 0) else 12)  # bar/beat/16th
                     p.setPen(QPen(QColor(255, 255, 255, a), 1)); p.drawLine(int(x), int(y0), int(x), int(y1))
                 k += 1
         # placed note points (active track bright, others faint) — a short bar on the lane + a dot.
@@ -1098,6 +1112,7 @@ class CurveCanvas(QWidget):
         if not (0 <= self.active < len(self.tracks)):
             return
         t, v = self._from_px(pos.x(), pos.y(), self._active_band()); pts = self.tracks[self.active]["points"]
+        t = self._gsnap(t)                               # snap the beat to the grid so samples fit the bar
         i = 0
         while i < len(pts) and pts[i]["t"] < t:
             i += 1
@@ -1236,7 +1251,7 @@ class CurveCanvas(QWidget):
         if mode == "anchor":
             lo = pts[pi - 1]["t"] + 1e-4 if pi > 0 else 0.0
             hi = pts[pi + 1]["t"] - 1e-4 if pi < len(pts) - 1 else 1.0
-            pt["t"] = min(max(t, lo), hi); pt["v"] = v   # free to move in time AND volume here
+            pt["t"] = min(max(self._gsnap(t), lo), hi); pt["v"] = v   # snap to grid; free in volume
             pt.pop("beat", None)                         # moving on the board un-locks the grid beat
         else:                                          # symmetric handle (out / in)
             hx, hy = t - pt["t"], v - pt["v"]
@@ -1792,6 +1807,21 @@ class SeparationBoard(QWidget):
             "QSpinBox{background:#16161e;border:1px solid #2a2a36;border-radius:8px;color:#e2e2ea;padding:4px 6px;}")
         self.bpm_box.valueChanged.connect(self._on_bpm)
         top.addWidget(self.bpm_box)
+        # time signature (drives the bar lines so you can see 4/4, 3/4, … and size loops to the bar)
+        top.addSpacing(8); top.addWidget(self._dim("time"))
+        self.sig_box = QComboBox(); self.sig_box.setFixedWidth(64)
+        self.sig_box.setStyleSheet(_COMBO_CSS)
+        for n in (2, 3, 4, 5, 6, 7):
+            self.sig_box.addItem(f"{n}/4", n)
+        self.sig_box.setCurrentIndex(2)               # 4/4
+        self.sig_box.currentIndexChanged.connect(self._on_sig)
+        top.addWidget(self.sig_box)
+        # snap toggle: place/move VOLUME beats on the grid so they line up with the bar
+        self.snap_btn = QPushButton("⌗ Snap"); self.snap_btn.setCursor(Qt.PointingHandCursor); self.snap_btn.setFixedHeight(30)
+        self.snap_btn.setToolTip("Snap beats to the grid (1/16) so samples fit the bar")
+        self.snap_btn.clicked.connect(self._toggle_snap)
+        self.snap_btn.setStyleSheet(_TOOL_ON)         # snap on by default
+        top.addWidget(self.snap_btn)
         # zoom
         top.addSpacing(8); top.addWidget(self._dim("zoom"))
         zout = self._chip("－"); zout.clicked.connect(lambda: self._zoom(1 / 0.7))
@@ -2007,7 +2037,7 @@ class SeparationBoard(QWidget):
                  for tk in self.takes]                                          # buf by reference (cheap)
         return {"tracks": tracks, "takes": takes, "active_take": self._active_take,
                 "bpm": self.bpm, "n": self._n, "color_seq": self._color_seq,
-                "grid_off": self.canvas.grid_off}
+                "grid_off": self.canvas.grid_off, "beats_per_bar": self.canvas.beats_per_bar}
 
     def restore(self, blob):
         import copy
@@ -2024,6 +2054,10 @@ class SeparationBoard(QWidget):
         self.bpm = int(blob.get("bpm", self.bpm)); self.canvas.bpm = self.bpm
         self._n = blob.get("n", self._n); self._color_seq = blob.get("color_seq", self._color_seq)
         self.canvas.grid_off = float(blob.get("grid_off", 0.0))
+        self.canvas.beats_per_bar = int(blob.get("beats_per_bar", 4))
+        if hasattr(self, "sig_box"):
+            self.sig_box.blockSignals(True)
+            self.sig_box.setCurrentIndex(max(0, self.canvas.beats_per_bar - 2)); self.sig_box.blockSignals(False)
         self.tracks.clear()                                                    # mutate in place (canvas shares it)
         for t in blob["tracks"]:
             tr = copy.deepcopy({k: v for k, v in t.items() if k != "color"})
@@ -2561,6 +2595,14 @@ class SeparationBoard(QWidget):
     def _on_bpm(self, v):
         self.bpm = v; self.canvas.bpm = v; self.canvas.update()
         self.bpm_changed.emit(int(v))
+
+    def _on_sig(self):
+        self.canvas.beats_per_bar = int(self.sig_box.currentData() or 4); self.canvas.update()
+
+    def _toggle_snap(self):
+        self.canvas.snap = not self.canvas.snap
+        self.snap_btn.setStyleSheet(_TOOL_ON if self.canvas.snap else _TOOL_OFF)
+        self.snap_btn.setText("⌗ Snap" if self.canvas.snap else "⌗ Snap off")
 
     def set_bpm_external(self, v):
         """Studio changed the tempo — update the box without re-emitting."""

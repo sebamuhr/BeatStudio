@@ -440,6 +440,29 @@ assert _q._voices[9]["next"] is not None, "quantized swap did not queue for the 
 bd._delete_track(vtr)
 print("VARIATIONS ok: add/switch variations (linked, independent); pad row = variation; quantized swap")
 
+# SNAP + TIME SIGNATURE: volume beats snap to the grid; the time-sig sets beats-per-bar.
+bd._set_tool("pen"); bd._set_mode("volume")
+bd.add_track(); str_ = bd.tracks[-1]; scol = bd.tracks.index(str_)
+bd.canvas.set_active(scol)
+bd.canvas.snap = True
+cvs = bd.canvas
+qx = cvs._to_px(0.137, 0.6, cvs._active_band())
+cvs.mousePressEvent(E(qx.x(), qx.y())); cvs.mouseReleaseEvent(E(qx.x(), qx.y())); app.processEvents()
+_snapped = str_["points"][-1]["t"]
+assert abs(_snapped - cvs._gsnap(0.137)) < 1e-6 and abs(_snapped - _snapped) == 0, "beat did not snap to the grid"
+# snap off → the next beat lands where clicked (finer)
+cvs.snap = False
+qx2 = cvs._to_px(0.331, 0.6, cvs._active_band())
+cvs.mousePressEvent(E(qx2.x(), qx2.y())); cvs.mouseReleaseEvent(E(qx2.x(), qx2.y())); app.processEvents()
+assert abs(str_["points"][-1]["t"] - 0.331) < 0.02, "snap-off should place near the click"
+cvs.snap = True
+# time signature drives beats-per-bar (drawn bar lines) + round-trips in snapshot
+bd.sig_box.setCurrentIndex(1); assert cvs.beats_per_bar == 3, "3/4 did not set beats-per-bar"
+_snap = bd.snapshot(); assert _snap.get("beats_per_bar") == 3, "time sig not in snapshot"
+bd.sig_box.setCurrentIndex(2)  # back to 4/4
+bd._delete_track(str_)
+print("SNAP/TIMESIG ok: volume beats snap to the grid (toggleable); time-sig sets the bar")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):
