@@ -279,13 +279,22 @@ class MainWindow(QMainWindow):
                 if s is not None and len(s):
                     self._looper.set_voice(col, s)
 
+    def _loop_gain(self, tr):
+        return float((tr.get("mix") or {}).get("volume", 1.0))
+
+    def _loop_pan(self, tr):
+        return float((tr.get("mix") or {}).get("balance", 0.0))
+
     def _loop_sample(self, tr):
         """The audio a pad loops = the track played through its SELECTED instrument/hum/synth/original
-        (the drawn pattern), cropped to the soundwave's loop region (whole take if none). Falls back to
-        the raw guide recording when nothing is drawn yet."""
+        (the drawn pattern), cropped to the soundwave's loop region (whole take if none). VOLUME and
+        BALANCE are NOT baked here — the looper applies them live so those knobs respond instantly.
+        Falls back to the raw guide recording when nothing is drawn yet."""
         b = self._board
         tk = next((t for t in b.takes if t["id"] == tr.get("take")), None) if b is not None else None
         lane, events = b._lane_events(tr) if b is not None else (None, None)
+        if lane is not None and lane.mix:                # bake EQ/reverb/etc, but leave volume/balance live
+            lane.mix = {**lane.mix, "volume": 1.0, "balance": 0.0}
         buf = self._render_pattern([lane], events) if (lane and events) else None
         if buf is None or not len(buf):                  # nothing drawn → loop the guide recording
             buf = tk["buf"] if tk is not None else None
@@ -350,7 +359,8 @@ class MainWindow(QMainWindow):
         if sample is None or not len(sample):
             self._preview_original(); return
         already = self._looper.is_on(col)
-        self._looper.set_voice(col, sample, quantized=already)   # swap at loop end if already playing
+        self._looper.set_voice(col, sample, quantized=already,
+                               gain=self._loop_gain(tr), pan=self._loop_pan(tr))
         self._loop_row[col] = row
         self._midi_relight()
 
@@ -841,22 +851,35 @@ class MainWindow(QMainWindow):
             self.timeline.set_project(self.project)
             self.headers.update(); self.toolbar.refresh_info(); self._rerender_if_playing()
             self._sync_commit.start()                        # debounce → one undo entry per gesture
-            if self._looper.active():                        # a live loop should pick up the edit
-                self._loop_refresh.start()
+            if self._looper.active():
+                self._apply_live_mix()                       # Volume/Balance change NOW (per-voice gain/pan)
+                self._loop_refresh.start()                   # EQ/reverb/pattern re-render at the loop end
         finally:
             self._syncing = False
 
-    def _refresh_looping_voices(self):
-        """Re-render any pad loop that's playing so mix/pattern edits take effect (swapped at the loop
-        boundary so it stays on beat)."""
+    def _apply_live_mix(self):
+        """Instantly push each looping track's Volume→gain and Balance→pan onto its voice."""
         b = self._board
         if b is None:
             return
         for col in list(self._looper.active()):
             if col < len(b.tracks):
-                s = self._loop_sample(b.tracks[col])
+                self._looper.set_gain(col, self._loop_gain(b.tracks[col]))
+                self._looper.set_pan(col, self._loop_pan(b.tracks[col]))
+
+    def _refresh_looping_voices(self):
+        """Re-render looping tracks (EQ/reverb/pattern) and swap in at the next loop boundary (on beat).
+        Volume/Balance were already applied live in _apply_live_mix."""
+        b = self._board
+        if b is None:
+            return
+        for col in list(self._looper.active()):
+            if col < len(b.tracks):
+                tr = b.tracks[col]
+                s = self._loop_sample(tr)
                 if s is not None and len(s):
-                    self._looper.set_voice(col, s, quantized=True)
+                    self._looper.set_voice(col, s, quantized=True,
+                                           gain=self._loop_gain(tr), pan=self._loop_pan(tr))
 
     def _sync_all_tracks(self):
         board_ids = {tr.get("lane_id") for tr in self._board.tracks}

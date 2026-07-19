@@ -4,6 +4,18 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.39.2 — MIX knobs actually DO something on a live loop (instant volume/balance)
+The numbers updated (v0.39.1) but a live pad loop still didn't audibly change: Volume/Balance felt dead and
+Balance couldn't work at all (mono).
+- **`Looper` is now STEREO with per-voice `gain` (Volume) + `pan` (Balance), applied LIVE in the callback.**
+  So Volume turns the loop up/down instantly and Balance pans it L/R instantly (verified: volume 40→gain 0.4,
+  balance −100→pan −1.0, both immediate). `set_gain`/`set_pan` update the playing voice with no re-render.
+- **Volume/Balance are NOT baked** into the loop buffer (`_loop_sample` renders with volume=1.0, balance=0);
+  the looper applies them live. The rest of the mix (High/Mid/Low/Reverb/Gain/Comp) is baked and swaps at
+  the next loop boundary (`_refresh_looping_voices`, debounced), staying on beat.
+- `_on_board_track_changed` applies gain/pan immediately (`_apply_live_mix`) and only debounces the re-render.
+- (The Studio transport already applied the full mix via `render`.) 32 checks green.
+
 ## v0.39.1 — MIX knobs actually connected: numbers update + live loop re-renders
 User: "the sliders work but aren't connected to their effects / not changing the numbers." Two gaps:
 - **Keyboard knob didn't update the number.** `midi_mix` set the value + moved the slider with

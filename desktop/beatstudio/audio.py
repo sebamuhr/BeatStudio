@@ -117,54 +117,70 @@ class AudioEngine:
 
 
 class Looper:
-    """A live multi-voice LOOPER for the pad grid: several sample loops play together and each one
-    loops seamlessly. Each 'voice' is one grid column (a track); setting a voice swaps its sample
-    (main ↔ variation). One shared output stream mixes all active voices."""
+    """A live multi-voice STEREO looper for the pad grid: several sample loops play together, each
+    looping seamlessly. Each 'voice' is one grid column (a track). Per-voice **gain** (Volume) and
+    **pan** (Balance) are applied LIVE in the callback, so those knobs respond instantly; the baked
+    buffer carries the rest of the mix (EQ/reverb/…) and swaps at the loop boundary."""
     def __init__(self):
         self.available = sd is not None
-        self._voices = {}          # id -> {"buf": float32, "pos": int}
+        self._voices = {}          # id -> {buf, pos, next, gain, pan}
         self._stream = None
 
     def _ensure_stream(self):
         if not self.available or self._stream is not None:
             return
         try:
-            self._stream = sd.OutputStream(samplerate=SR, channels=1, dtype="float32",
+            self._stream = sd.OutputStream(samplerate=SR, channels=2, dtype="float32",
                                            blocksize=512, callback=self._cb)
             self._stream.start()
         except Exception:
             self._stream = None
 
     def _cb(self, outdata, frames, time_info, status):
-        out = outdata[:, 0]; out[:] = 0.0
+        left = outdata[:, 0]; right = outdata[:, 1]; left[:] = 0.0; right[:] = 0.0
         for v in list(self._voices.values()):
             buf = v["buf"]; n = len(buf)
             if n < 1:
                 continue
+            g = v.get("gain", 1.0); pan = v.get("pan", 0.0)
+            lg = g * min(1.0, 1.0 - pan); rg = g * min(1.0, 1.0 + pan)   # -1 = left, +1 = right
             pos = v["pos"]; i = 0
             while i < frames:
                 take = min(frames - i, n - pos)
-                out[i:i + take] += buf[pos:pos + take]
+                seg = buf[pos:pos + take]
+                left[i:i + take] += seg * lg; right[i:i + take] += seg * rg
                 pos += take; i += take
-                if pos >= n:                      # loop boundary — swap to a pending variation HERE,
-                    nxt = v.get("next")           # so the switch lands on the beat, never off
+                if pos >= n:                      # loop boundary — swap a pending buffer HERE, so any
+                    nxt = v.get("next")           # variation/mix change lands on the beat, never off
                     if nxt is not None:
                         v["buf"] = nxt; v["next"] = None; buf = nxt; n = len(buf)
                     pos = 0
             v["pos"] = pos
-        np.tanh(out, out=out)                     # soft-clip the sum
+        np.tanh(left, out=left); np.tanh(right, out=right)              # soft-clip each channel
 
-    def set_voice(self, vid, buf, quantized=False):
-        """Start/replace a looping voice. quantized=True swaps at the next loop boundary (stays on
-        beat) when the voice is already playing; otherwise it starts immediately."""
+    def set_voice(self, vid, buf, quantized=False, gain=1.0, pan=0.0):
+        """Start/replace a looping voice. quantized=True swaps the BUFFER at the next loop boundary
+        (stays on beat); gain/pan are applied live and update immediately either way."""
         if buf is None or not len(buf):
             self.stop_voice(vid); return
         buf = np.ascontiguousarray(buf, np.float32)
         if quantized and vid in self._voices:
             self._voices[vid]["next"] = buf       # swap at the end of the current loop
+            self._voices[vid]["gain"] = float(gain); self._voices[vid]["pan"] = float(pan)
         else:
-            self._voices[vid] = {"buf": buf, "pos": 0, "next": None}
+            self._voices[vid] = {"buf": buf, "pos": 0, "next": None,
+                                 "gain": float(gain), "pan": float(pan)}
         self._ensure_stream()
+
+    def set_gain(self, vid, gain):
+        """Volume knob → instant per-voice gain (no re-render)."""
+        if vid in self._voices:
+            self._voices[vid]["gain"] = float(gain)
+
+    def set_pan(self, vid, pan):
+        """Balance knob → instant per-voice pan (−1 left … +1 right)."""
+        if vid in self._voices:
+            self._voices[vid]["pan"] = max(-1.0, min(1.0, float(pan)))
 
     def stop_voice(self, vid):
         self._voices.pop(vid, None)
