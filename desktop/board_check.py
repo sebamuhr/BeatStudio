@@ -227,39 +227,48 @@ w.timeline.selected = {selev.id}; w.timeline.selection_changed.emit(); app.proce
 assert apid in bd.canvas.sel_pts, "studio->board selection link failed"
 print("LINKED SELECTION ok: board anchor <-> Studio beat both ways")
 
-# RECORD SECONDARY: a NEW take row (own colour), same length, tracks untouched; new tracks bind to it
-n_before = len(bd.buf); ntracks = len(bd.tracks); ntakes = len(bd.takes)
-sec = (0.2 * np.random.randn(len(bd.buf) // 2)).astype("float32")
-new_tid = bd.add_take(sec)
-assert len(bd.takes) == ntakes + 1 and len(bd.tracks) == ntracks, "add_take changed tracks"
-assert len(bd.canvas.takes[-1]["buf"]) == n_before, "secondary take not padded to main length"
+# 1 TRACK = 1 SOUNDWAVE: each add_track mints its OWN take (bound 1:1), not shared.
+nt0 = len(bd.tracks); nk0 = len(bd.takes)
 bd.add_track()
-assert bd.tracks[-1]["take"] == new_tid, "new track did not bind to the secondary take row"
-print("RECORD SECONDARY ok: new take row, own colour, new tracks draw over it")
+assert len(bd.tracks) == nt0 + 1 and len(bd.takes) == nk0 + 1, "add_track should mint its own soundwave"
+assert bd.tracks[-1]["take"] == bd.takes[-1]["id"], "new track not bound 1:1 to its own soundwave"
+assert len({t["take"] for t in bd.tracks}) == len(bd.tracks), "takes must be unique per track (1:1)"
+t_a = bd.tracks[-1]; ka = next(i for i, t in enumerate(bd.takes) if t["id"] == t_a["take"])
+t_a["kind"] = "hum"; t_a["sound"] = "aah"
+t_a["points"] = [{"id": "d1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
+print("1:1 MODEL ok: add_track mints its own soundwave, bound one-to-one")
 
-# TAKE SELECT: tick a soundwave → everything (notes view, new tracks, active track) scopes to IT
-sec_track = bd.tracks[-1]                                  # the track we just bound to take 1
-assert bd.canvas.sel_take == 1 and bd._active_take == new_tid, "overdub should select the new wave"
-bd.canvas.set_sel_take(0)                                  # tick the MAIN wave
-assert bd.canvas._active_band() == 0, "selecting take 0 did not move the working row"
-assert bd._active_take == bd.takes[0]["id"], "board _active_take did not follow the selection"
-act = bd.canvas.active
-assert 0 <= act < len(bd.tracks) and bd.tracks[act]["take"] == bd.takes[0]["id"], \
-    "active track must belong to the selected wave"
-# NOTES mode must show the SELECTED wave's pitch, not always the Main one (the reported bug)
-bd._set_mode("notes")
-assert bd.canvas._active_band() == 0, "notes view ignored the selected wave"
-bd.canvas.set_sel_take(1)
-assert bd.canvas._active_band() == 1 and bd.canvas.active == bd.tracks.index(sec_track), \
-    "selecting the secondary wave did not scope the notes view + active track to it"
-# a new track binds to the SELECTED wave, and the wave's checkbox is clickable
-bd.add_track(); assert bd.tracks[-1]["take"] == new_tid, "new track ignored the selected wave"
-bd._delete_track(bd.tracks[-1])
-assert bd.canvas._hit_take_sel(bd.canvas._take_chip_rect(0).center()) == 0, "notes take chip not hittable"
+# TAKE SELECT: tick a soundwave → the working row + active track + notes view scope to IT
+bd.canvas.set_sel_take(ka)
+assert bd.canvas._active_band() == ka, "selecting a wave did not move the working row"
+assert bd._active_take == bd.takes[ka]["id"], "board _active_take did not follow the selection"
+assert bd.tracks[bd.canvas.active]["take"] == t_a["take"], "active track must belong to the selected wave"
+bd._set_mode("notes"); assert bd.canvas._active_band() == ka, "notes view ignored the selected wave"
+assert bd.canvas._hit_take_sel(bd.canvas._take_chip_rect(ka).center()) == ka, "notes take chip not hittable"
 bd._set_mode("volume")
-assert bd.canvas._hit_take_sel(bd.canvas._take_chk_rect(1).center()) == 1, "volume take checkbox not hittable"
-bd.canvas.set_sel_take(1)
-print("TAKE SELECT ok: ticking a soundwave scopes notes/active-track/new-tracks to it")
+assert bd.canvas._hit_take_sel(bd.canvas._take_chk_rect(ka).center()) == ka, "volume take checkbox not hittable"
+print("TAKE SELECT ok: ticking a soundwave scopes the working row / active track / notes view to it")
+
+# DUPLICATE: 'Soundwave' copies the audio only (fresh beats); 'Full' copies audio + beats + instrument.
+bd.takes[ka]["buf"][:100] = 0.5                            # give the source some audio to copy
+nt1 = len(bd.tracks)
+dw = bd._do_duplicate(t_a, full=False)
+assert len(bd.tracks) == nt1 + 1 and dw["take"] != t_a["take"], "duplicate did not make a new track+wave"
+assert not dw.get("points"), "'Soundwave' duplicate must NOT copy the beats"
+dtk = next(t for t in bd.takes if t["id"] == dw["take"])
+assert float(np.abs(dtk["buf"][:100]).sum()) > 0, "'Soundwave' duplicate did not copy the audio"
+df = bd._do_duplicate(t_a, full=True)
+assert len(df.get("points") or []) == 1 and df["kind"] == "hum", "'Full' duplicate must copy beats + instrument"
+bd._delete_track(dw); bd._delete_track(df)
+
+# PER-TRACK RECORD: the ● button emits record_track(take_id); set_take_buf replaces that wave's audio.
+_got = {}
+bd.record_track.connect(lambda tid: _got.setdefault("tid", tid))
+bd._on_track_record(t_a); assert _got.get("tid") == t_a["take"], "record button did not target this soundwave"
+newaud = (0.4 * np.random.randn(2048)).astype("float32")
+bd.set_take_buf(t_a["take"], newaud)
+assert float(np.abs(bd.canvas.takes[ka]["buf"][:2048]).sum()) > 0, "set_take_buf did not load the recording"
+print("PER-TRACK RECORD ok: ● targets the track's soundwave; set_take_buf loads the guide audio")
 
 # NOTES LINE (ties): pitched clicks auto-connect; held = bars, glide = a sliding pitch_track;
 # right-click cuts a line; drums never auto-tie.
@@ -292,36 +301,28 @@ assert not any(p.get("tie") for p in dtr["points"]), "a drum auto-tied (must sta
 bd._delete_track(dtr); bd._delete_track(ntr); bd._set_mode("volume")
 print("NOTES LINE ok: pitched clicks tie into held bars + glides; right-click cuts; drums stay hits")
 
-# WAVE CONTROLS (#6): Solo/Mute a whole soundwave (its buttons hit-test + reach the lanes),
-# add-track binds under the selected wave, per-wave mode is remembered.
-cvw = bd.canvas
-# each wave's tracks inherit the wave's solo/mute at render
-bd.canvas.set_sel_take(1)
-s_r, m_r = cvw._take_sm_rects(1)
-assert cvw._hit_take_sm(s_r.center()) == (1, "solo") and cvw._hit_take_sm(m_r.center()) == (1, "mute"), \
+# WAVE CONTROLS (#6): Solo/Mute a soundwave reaches its (1:1) track's lane; per-wave view remembered.
+cvw = bd.canvas; bd._set_mode("volume")
+bd.add_track(); wa = bd.tracks[-1]; kwa = next(i for i, t in enumerate(bd.takes) if t["id"] == wa["take"])
+bd.add_track(); wb = bd.tracks[-1]; kwb = next(i for i, t in enumerate(bd.takes) if t["id"] == wb["take"])
+wa["points"] = [{"id": "wc1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
+wb["points"] = [{"id": "wc2", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
+s_r, m_r = cvw._take_sm_rects(kwa)
+assert cvw._hit_take_sm(s_r.center()) == (kwa, "solo") and cvw._hit_take_sm(m_r.center()) == (kwa, "mute"), \
     "Solo/Mute buttons not hittable"
-tw1 = next(t for t in bd.tracks if t.get("take") == bd.takes[1]["id"])
-tw1.setdefault("points", []).append({"id": "wc1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0})
-tw0 = next(t for t in bd.tracks if t.get("take") == bd.takes[0]["id"] and t.get("points"))
-bd._on_take_flag(1, "mute")
-assert bd.takes[1]["muted"], "wave mute did not set on the take"
-lane_m, _ = bd._lane_events(tw1)
-assert lane_m.muted, "a muted wave's track did not inherit mute"
-bd._on_take_flag(1, "mute")                            # toggle back
-bd._on_take_flag(0, "solo")
-lane_s, _ = bd._lane_events(tw0)
-assert lane_s.solo, "a soloed wave's track did not inherit solo"
-bd._on_take_flag(0, "solo")
-# add-track binds to the selected wave
-bd.canvas.set_sel_take(1); bd.add_track()
-assert bd.tracks[-1]["take"] == bd.takes[1]["id"], "new track did not bind under the selected wave"
-# per-wave mode memory: wave 1 in notes, wave 0 in volume → selecting flips the view back
-bd._set_mode("notes"); assert bd.takes[1].get("mode") == "notes", "mode not remembered on the wave"
-bd.canvas.set_sel_take(0); bd._set_mode("volume")
-bd.canvas.set_sel_take(1); assert bd.canvas.mode == "notes", "selecting a wave did not restore its view"
-bd.canvas.set_sel_take(0); assert bd.canvas.mode == "volume", "selecting a wave did not restore its view"
-bd._delete_track(bd.tracks[-1]); bd._set_mode("volume")
-print("WAVE CONTROLS ok: soundwave Solo/Mute reach the lanes; add-track binds to the wave; mode remembered")
+bd._on_take_flag(kwa, "mute"); assert bd.takes[kwa]["muted"], "wave mute did not set on the take"
+lane_m, _ = bd._lane_events(wa); assert lane_m.muted, "a muted wave's track did not inherit mute"
+bd._on_take_flag(kwa, "mute")
+bd._on_take_flag(kwb, "solo")
+lane_s, _ = bd._lane_events(wb); assert lane_s.solo, "a soloed wave's track did not inherit solo"
+bd._on_take_flag(kwb, "solo")
+# per-wave mode memory: wave A in notes, wave B in volume → selecting flips the view back
+bd.canvas.set_sel_take(kwa); bd._set_mode("notes")
+bd.canvas.set_sel_take(kwb); bd._set_mode("volume")
+bd.canvas.set_sel_take(kwa); assert bd.canvas.mode == "notes", "selecting a wave did not restore its view"
+bd.canvas.set_sel_take(kwb); assert bd.canvas.mode == "volume", "selecting a wave did not restore its view"
+bd._delete_track(wa); bd._delete_track(wb); bd._set_mode("volume")
+print("WAVE CONTROLS ok: soundwave Solo/Mute reach the lanes; per-wave view remembered")
 
 # INSTRUMENTS (#4): the top-level Original·Hum·Synth·Instrument selector switches kind + sub-picker;
 # hum and pitched-instrument voices render.

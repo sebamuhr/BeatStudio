@@ -1,8 +1,32 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.35.0** (shown in the window title bar as
-`Beat Studio · v0.35.0`).
+continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
+`Beat Studio · v0.36.0`).
+
+## v0.36.0 — 1 track = 1 soundwave · per-track Record + Duplicate · Record main/secondary removed
+Phase 1 of the sample-factory plan (`PLAN-v0.35-sample-factory-arranger.md`). The separator is now
+per-track soundwaves; each track row carries its own controls (matches the Studio header).
+- **1 track = 1 soundwave (1:1).** `add_track` now mints its OWN take (reuses an unbound one — the initial
+  Main — else creates a fresh silent `Sound N`); takes are unique per track. `_delete_track` drops the
+  track's take too (no ghost soundwave rows; keeps ≥1). Helpers: `_new_take_row`, `_make_track`,
+  `_take_len`, `set_take_buf`.
+- **Record main / Record secondary REMOVED** from the toolbar. Recording is **per-track**: a **● button on
+  each track row** records a *guide* into that track's soundwave (`record_track` signal →
+  `mainwindow._toggle_track_record`/`_stop_track_record` → `board.set_take_buf`; live waveform shows on the
+  track's row while recording).
+- **Duplicate button (⧉) per track** → asks **Soundwave** (copy the audio only, fresh beats) or **Full**
+  (audio + beats + instrument). `_duplicate_track` (dialog) / `_do_duplicate(src, full)` (testable core).
+- **Row controls** now: ● Record · ⧉ Duplicate · S Solo · M Mute · ♪ Volume/Notes · 👁 · ✕ (Solo/Mute/View
+  from v0.35, now truly per-track since 1:1).
+- **Soundwave rows ≈ track-card height** (`TAKE_ROW_H=132`, capped in `_band`), so each wave lines up with
+  its card instead of two tall waves spanning three cards.
+- Verified: `board_check` rewritten for the 1:1 model — new **1:1 MODEL**, **PER-TRACK RECORD**, duplicate
+  (Soundwave/Full) checks; 30 checks green. Screenshot `scratchpad/newmodel.png`.
+- **STILL TODO (Phase 2/3 of the plan):** the "select area" tool on each soundwave card → send only that
+  region to the Studio as a clip; the Studio as a song ARRANGER (place/copy/paste/drag; **linked content,
+  per-placement loop-length** — locked in the plan). Also the global Volume/Notes toolbar toggle is still
+  present (per-track ♪ exists now); remove it if the per-track view fully replaces it.
 
 ## v0.35.0 — draggable panes · always-on Studio navigator · APC Key 25 mk2 MIDI control surface
 - **Draggable dividers.** The separator's track-list↔canvas divider (was a fixed 300px that cropped the

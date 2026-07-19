@@ -412,6 +412,8 @@ class MainWindow(QMainWindow):
             self._stop_master_record()
         elif self._rec_lane == "__secondary__":
             self._stop_secondary_record()
+        elif isinstance(self._rec_lane, tuple) and self._rec_lane[0] == "__track__":
+            self._stop_track_record()
         else:
             self._stop_record()
 
@@ -585,6 +587,44 @@ class MainWindow(QMainWindow):
             self._orig_rec = np.clip(mix, -1.0, 1.0).astype(np.float32)
         self._set_title("secondary added — draw a track over its row to separate it")
 
+    def _toggle_track_record(self, take_id):
+        """● on a track row → record a GUIDE into that track's soundwave (replaces its audio)."""
+        if not take_id or self._board is None:
+            return
+        if self.recorder.recording:
+            self._stop_track_record()
+            return
+        if not self.recorder.available:
+            self._set_title("no mic/audio (sudo apt install libportaudio2)")
+            return
+        self._stop()                                      # clear any transport/preview first
+        self._rec_lane = ("__track__", take_id)
+        if not self.recorder.start():
+            self._rec_lane = None; return
+        self._board.set_track_recording(take_id, True)
+        self.timeline.live_markers = []
+        self._timer.start(); self._start_beat_clock()
+
+    def _stop_track_record(self):
+        self._metro_timer.stop(); self._timer.stop(); self.engine.stop()
+        self.timeline.rec_wave = None; self.timeline.set_playhead(None)
+        self.toolbar.set_rec_level(None, None)
+        buf = self.recorder.stop()
+        take_id = self._rec_lane[1] if isinstance(self._rec_lane, tuple) else None
+        self._rec_lane = None
+        if self._board is not None and take_id:
+            self._board.set_track_recording(take_id, False)
+        if buf is None or len(buf) < SR // 8:
+            self._set_title("recording too short — try again")
+            return
+        try:
+            hp = groove.highpass(buf, SR)
+        except Exception:
+            hp = buf
+        if self._board is not None and take_id:
+            self._board.set_take_buf(take_id, hp)
+        self._set_title("guide recorded — trace it in Notes / draw its beats in Volume")
+
     def _make_board(self, hp, bpm):
         board = SeparationBoard(hp, SR, bpm,
                                 instrument_items=self.settings.items,
@@ -598,6 +638,7 @@ class MainWindow(QMainWindow):
         board.create_requested.connect(self._resync_all_board)   # legacy "resync everything"
         board.record_requested.connect(self._toggle_master_record)
         board.record_secondary_requested.connect(self._toggle_secondary_record)
+        board.record_track.connect(self._toggle_track_record)
         board.tracks_changed.connect(self._on_board_track_changed)
         board.take_audio_changed.connect(self._on_take_audio_changed)
         board.bpm_changed.connect(self._on_board_bpm)
@@ -1235,7 +1276,9 @@ class MainWindow(QMainWindow):
                 self.timeline.live_markers = [(li, self.project.start_at + t / self._spb)
                                               for t in list(self.recorder.live_onsets)]
             self.toolbar.set_rec_level(self.recorder.level, self.recorder.peak)
-            if self._rec_lane in ("__master__", "__secondary__") and self._board is not None and self._board.isVisible():
+            _rl = self._rec_lane
+            _board_rec = _rl in ("__master__", "__secondary__") or (isinstance(_rl, tuple) and _rl[0] == "__track__")
+            if _board_rec and self._board is not None and self._board.isVisible():
                 self._board.canvas.set_live(list(self.recorder.live_env), self.recorder.peak > 0.92)
             self.timeline.viewport().update()
             x = self.timeline.x_of_beat(beat)

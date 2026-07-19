@@ -16,6 +16,7 @@ A line is an amplitude shape over time (0 at the centre line, 1 at the top). Eve
 on a visible track becomes a hit on the tempo grid, played with that track's instrument.
 """
 from __future__ import annotations
+import copy
 import numpy as np
 from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QWidget, QComboBox, QScrollArea, QFrame, QLineEdit, QSizePolicy,
@@ -89,6 +90,7 @@ PIANO_MIN, PIANO_MAX = 21, 108   # full piano (A0..C8) — scroll the NOTES view
 NOTE_SPAN = 30                   # semitones visible at once in NOTES mode (scroll for the rest)
 NOTE_SNAP_DIV = 48               # notes snap to 1/48 of a beat (super fine — accurate placement)
 TAKE_BAR = 24                    # height of the take-picker strip at the top of NOTES mode
+TAKE_ROW_H = 132                 # a soundwave row ≈ a track card's height (1 track = 1 soundwave)
 # each take (main + overdubs) gets its own row + waveform colour
 TAKE_HEX = ["#ff6b6b", "#c0a8ff", "#5cd6c0", "#ffd24d", "#ff8c5c", "#6ecbff"]
 
@@ -231,9 +233,11 @@ class CurveCanvas(QWidget):
     def _band(self, i):
         """Vertical layout for take-row i → (top, height, baseline-y, usable-height). The baseline
         (v=0) sits near the BOTTOM of the row and v=1 is the top, so the waveform is a HALF-wave
-        going up (the mirrored bottom half was wasted). `_to_px`/`_from_px` map through these."""
+        going up. Each soundwave row is capped near a track CARD's height (1 track = 1 soundwave, so
+        a wave lines up with its card) — rows only shrink below that when there are too many to fit."""
         y0 = 6.0; y1 = self.height() - MM_H - 18
-        n = max(1, len(self.takes)); bh = (y1 - y0) / n
+        n = max(1, len(self.takes)); avail = y1 - y0
+        bh = avail / n if n * TAKE_ROW_H > avail else TAKE_ROW_H
         top = y0 + i * bh
         return top, bh, top + bh - 8, bh - 26
 
@@ -1277,6 +1281,8 @@ class TrackRow(QFrame):
     preview_sound = Signal(str, object, object)   # ▶ play one sound (preset, params, button) — Base/Morph
     delete = Signal(object)
     flag = Signal(object, str)               # per-track control: (track, "solo"|"mute"|"volume"|"notes")
+    record = Signal(object)                  # ● record a guide into THIS track's soundwave
+    duplicate = Signal(object)               # ⧉ duplicate this track (asks: soundwave only / full)
 
     def __init__(self, track, items):
         super().__init__()
@@ -1294,20 +1300,26 @@ class TrackRow(QFrame):
         self.name = QLineEdit(track["name"])
         self.name.setStyleSheet("QLineEdit{background:transparent;border:none;color:#e2e2ea;font-size:13px;font-weight:600;}")
         self.name.textChanged.connect(self._on_name)
-        # per-track controls (like the Studio header): Solo · Mute · Volume/Notes view
+        # per-track controls (like the Studio header): Record · Duplicate · Solo · Mute · Volume/Notes
+        self.b_rec = QPushButton("●"); self.b_rec.setToolTip("Record a guide into this track's soundwave")
+        self.b_dup = QPushButton("⧉"); self.b_dup.setToolTip("Duplicate this track (soundwave only / full)")
         self.b_solo = QPushButton("S"); self.b_mute = QPushButton("M"); self.b_vn = QPushButton("♪")
         self.b_solo.setToolTip("Solo this track"); self.b_mute.setToolTip("Mute this track")
         self.b_vn.setToolTip("This track's view: Volume ▁ / Notes ♪")
+        self.b_rec.clicked.connect(lambda: self.record.emit(self.track))
+        self.b_dup.clicked.connect(lambda: self.duplicate.emit(self.track))
         self.b_solo.clicked.connect(lambda: self.flag.emit(self.track, "solo"))
         self.b_mute.clicked.connect(lambda: self.flag.emit(self.track, "mute"))
         self.b_vn.clicked.connect(self._toggle_vn)
         self.eye = QPushButton("👁"); self.eye.setToolTip("Show / hide"); self.eye.clicked.connect(self._toggle_vis)
         self.b_del = QPushButton("✕"); self.b_del.setToolTip("Delete track")
         self.b_del.clicked.connect(lambda: self.delete.emit(self.track))
-        for b in (self.b_solo, self.b_mute, self.b_vn, self.eye, self.b_del):
-            b.setFixedSize(26, 26); b.setCursor(Qt.PointingHandCursor)
+        for b in (self.b_rec, self.b_dup, self.b_solo, self.b_mute, self.b_vn, self.eye, self.b_del):
+            b.setFixedSize(25, 25); b.setCursor(Qt.PointingHandCursor)
             b.setStyleSheet("QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:6px;color:#c0c0cc;font-size:12px;}QPushButton:hover{background:#1e1e28;}")
+        self.b_rec.setStyleSheet("QPushButton{background:rgba(255,93,93,0.16);border:1px solid #8a2a2a;border-radius:6px;color:#ff8a8a;font-size:12px;}QPushButton:hover{background:rgba(255,93,93,0.28);}")
         top.addWidget(self.swatch); top.addWidget(self.name, 1)
+        top.addWidget(self.b_rec); top.addWidget(self.b_dup)
         top.addWidget(self.b_solo); top.addWidget(self.b_mute); top.addWidget(self.b_vn)
         top.addWidget(self.eye); top.addWidget(self.b_del)
         lay.addLayout(top)
@@ -1479,6 +1491,10 @@ class TrackRow(QFrame):
     def mousePressEvent(self, ev):
         self.activated.emit(self.track); super().mousePressEvent(ev)
 
+    def set_recording(self, on):
+        """Flip the ● record button to ■ while this track is recording its guide."""
+        self.b_rec.setText("■" if on else "●")
+
     def _toggle_vn(self):
         # ask the board to flip THIS track's soundwave between Volume and Notes
         self.flag.emit(self.track, "notes" if self._vn_mode() != "notes" else "volume")
@@ -1576,8 +1592,9 @@ class TrackRow(QFrame):
 # ---------------------------------------------------------------- the board
 class SeparationBoard(QWidget):
     create_requested = Signal()          # legacy "resync all" hook (button removed)
-    record_requested = Signal()          # ● Record main (the primary take)
-    record_secondary_requested = Signal()  # ● Record secondary (overdub on top of the main)
+    record_requested = Signal()          # ● Record main (the primary take) — legacy, unused
+    record_secondary_requested = Signal()  # ● Record secondary (overdub) — legacy, unused
+    record_track = Signal(str)           # ● on a track row → record a guide into that soundwave (take id)
     tracks_changed = Signal(str)         # a track/points changed → live-sync that lane (id, "" = all)
     take_audio_changed = Signal()        # the take WAVEFORM itself changed (Fit stretch / delete) → resync audio
     bpm_changed = Signal(int)            # the board's BPM box changed → sync the Studio
@@ -1616,16 +1633,10 @@ class SeparationBoard(QWidget):
         root = QVBoxLayout(self); root.setContentsMargins(14, 12, 14, 12); root.setSpacing(10)
 
         top = QHBoxLayout()
-        self.rec_btn = QPushButton("●  Record main"); self.rec_btn.setCursor(Qt.PointingHandCursor)
-        self.rec_btn.setFixedHeight(34); self.rec_btn.clicked.connect(self.record_requested.emit)
-        self._style_rec(False)
-        top.addWidget(self.rec_btn)
-        self.rec2_btn = QPushButton("＋ Record secondary"); self.rec2_btn.setCursor(Qt.PointingHandCursor)
-        self.rec2_btn.setFixedHeight(34); self.rec2_btn.setToolTip(
-            "Overdub: the main take plays in the background while you record an extra sound on top, at the same tempo")
-        self.rec2_btn.clicked.connect(self.record_secondary_requested.emit)
-        self._style_rec2(False)
-        top.addSpacing(6); top.addWidget(self.rec2_btn)
+        # Record main/secondary REMOVED from the toolbar — recording is now per-track (the ● button on
+        # each track row). The button objects are kept (hidden) so state helpers stay valid.
+        self.rec_btn = QPushButton(); self.rec_btn.setParent(self); self.rec_btn.hide()
+        self.rec2_btn = QPushButton(); self.rec2_btn.setParent(self); self.rec2_btn.hide()
         # tucked-away help: a small "?" that reveals the how-to only when clicked
         help_txt = ("Record here, then click the wave to place points — drag as you place to curve the "
                     "line (pen tool). Drag the round handles to reshape · scroll to zoom.")
@@ -1913,6 +1924,8 @@ class SeparationBoard(QWidget):
         row.preview.connect(self._preview_track); row.delete.connect(self._delete_track)
         row.preview_sound.connect(self._preview_sound)
         row.flag.connect(self._on_track_flag)
+        row.record.connect(self._on_track_record)
+        row.duplicate.connect(self._duplicate_track)
         row.refresh_flags()
         self._rows.append(row); self._list.insertWidget(self._list.count() - 1, row)
         return row
@@ -1942,19 +1955,107 @@ class SeparationBoard(QWidget):
         for row in self._rows:
             row.refresh_flags()
 
-    def add_track(self):
+    def _take_len(self):
+        return len(self.takes[0]["buf"]) if self.takes else (len(self.buf) if self.buf is not None else self.sr)
+
+    def _new_take_row(self, buf=None, name=None):
+        """Mint a soundwave (take) row — 1 track = 1 soundwave. Silent unless a buffer is given."""
+        n = self._take_len()
+        b = np.zeros(n, np.float32)
+        if buf is not None:
+            src = np.asarray(buf, np.float32); m = min(n, len(src)); b[:m] = src[:m]
+        tk = {"id": uid("T"), "buf": b, "color": take_color(len(self.takes)),
+              "name": name or f"Sound {len(self.takes) + 1}", "solo": False, "muted": False, "mode": "volume"}
+        self.takes.append(tk)
+        return tk
+
+    def _make_track(self, take_id, name=None, base=None):
+        """Build a track dict bound 1:1 to `take_id` (optionally copying instrument from `base`)."""
         self._n += 1
-        # a STABLE colour from a monotonic counter — removing a track never recolours the others
         color = theme.lane_color(self._color_seq); self._color_seq += 1
-        tr = {"lane_id": uid("R"), "name": f"Track {self._n}", "color": color, "take": self._active_take,
+        tr = {"lane_id": uid("R"), "name": name or f"Track {self._n}", "color": color, "take": take_id,
               "kind": "drum", "sound": DRUMS[0], "sound_b": "", "points": [], "visible": True,
               "params": default_params(), "params_b": default_params(),
-              "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72,
-              "fx": default_fx()}
-        self.tracks.append(tr)
+              "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72, "fx": default_fx()}
+        if base is not None:                             # duplicate the instrument (not the beats)
+            for k in ("kind", "sound", "sound_b", "params", "params_b", "hum_params", "lo_note", "hi_note", "fx"):
+                if k in base:
+                    tr[k] = copy.deepcopy(base[k])
+        return tr
+
+    def add_track(self):
+        # 1 track = 1 soundwave: reuse an unbound take (the initial Main) or mint a fresh silent one.
+        bound = {t.get("take") for t in self.tracks}
+        tk = next((t for t in self.takes if t["id"] not in bound), None) or self._new_take_row()
+        tr = self._make_track(tk["id"])
+        self.tracks.append(tr); self._active_take = tk["id"]
         self._add_row(tr)
+        self.canvas.set_takes(self.takes); self._sync_sel_take()
         self._activate_track(tr); self._sel_take_rows(); self._refresh()
         self.tracks_changed.emit(tr["lane_id"])
+
+    def _duplicate_track(self, src):
+        """⧉ Duplicate: ask 'Soundwave' (copy the audio only) or 'Full' (audio + beats + instrument)."""
+        from PySide6.QtWidgets import QMessageBox
+        box = QMessageBox(self); box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Duplicate track")
+        box.setText(f"Duplicate “{src['name']}” — how much?")
+        box.setInformativeText("Soundwave = copy just the recording (fresh beats).\n"
+                               "Full = copy the recording, the beats and the instrument.")
+        b_wave = box.addButton("Soundwave", QMessageBox.AcceptRole)
+        b_full = box.addButton("Full", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked in (b_wave, b_full):
+            self._do_duplicate(src, full=(clicked is b_full))
+
+    def _do_duplicate(self, src, full):
+        """Create a new 1:1 track+soundwave copying `src`'s audio (+ beats/instrument if `full`)."""
+        src_take = next((t for t in self.takes if t["id"] == src.get("take")), None)
+        tk = self._new_take_row(buf=(src_take["buf"].copy() if src_take is not None else None),
+                                name=f"{src['name']} copy")
+        tr = self._make_track(tk["id"], name=f"{src['name']} copy", base=(src if full else None))
+        if full:
+            self._ensure_pt_ids(src)
+            tr["points"] = copy.deepcopy(src.get("points") or [])
+        self.tracks.append(tr); self._active_take = tk["id"]
+        self._add_row(tr)
+        self.canvas.set_takes(self.takes); self._sync_sel_take()
+        self._activate_track(tr); self._sel_take_rows(); self._refresh()
+        self.tracks_changed.emit(tr["lane_id"])
+        return tr
+
+    def _on_track_record(self, tr):
+        """● on a track row → record a guide into THIS track's soundwave (handled by the Studio)."""
+        self._activate_track(tr)          # so the live waveform draws on this track's row
+        self.record_track.emit(tr.get("take", ""))
+
+    def set_take_buf(self, take_id, buf):
+        """Replace a soundwave's audio (a per-track recording landed). Keeps all takes the same length."""
+        tk = next((t for t in self.takes if t["id"] == take_id), None)
+        if tk is None or buf is None or not len(buf):
+            return
+        buf = np.asarray(buf, np.float32)
+        if self.takes.index(tk) == 0:                    # take 0 defines the grid length
+            self.buf = buf; n = len(buf)
+            for t in self.takes:
+                if len(t["buf"]) != n:
+                    row = np.zeros(n, np.float32); m = min(n, len(t["buf"])); row[:m] = t["buf"][:m]; t["buf"] = row
+            tk["buf"] = buf
+        else:
+            n = self._take_len(); row = np.zeros(n, np.float32); m = min(n, len(buf)); row[:m] = buf[:m]; tk["buf"] = row
+        v0, v1 = self.canvas.view0, self.canvas.view1
+        self.canvas.set_takes(self.takes); self.canvas.view0, self.canvas.view1 = v0, v1
+        self._sync_sel_take(); self.canvas.update()
+        self.take_audio_changed.emit(); self.tracks_changed.emit("")
+
+    def set_track_recording(self, take_id, on):
+        """Flip the ● button on the row(s) bound to `take_id` while its guide records."""
+        for tr, row in zip(self.tracks, self._rows):
+            if tr.get("take") == take_id:
+                row.set_recording(on)
+        self.set_recording(on)               # live waveform on the canvas for that take
 
     def _preview_sound(self, preset, params, btn):
         def go():
@@ -2041,13 +2142,19 @@ class SeparationBoard(QWidget):
             self.tracks_changed.emit(self.tracks[idx].get("lane_id", ""))
 
     def _delete_track(self, tr):
-        idx = self.tracks.index(tr); lane_id = tr.get("lane_id", ""); self.tracks.pop(idx)
+        idx = self.tracks.index(tr); lane_id = tr.get("lane_id", ""); take_id = tr.get("take")
+        self.tracks.pop(idx)
         row = self._rows.pop(idx); self._list.removeWidget(row); row.deleteLater()
+        # 1 track = 1 soundwave: the wave goes with the track (no ghost rows). Keep ≥1 take so the
+        # canvas always has a row; a leftover unbound take is reused by the next Add track.
+        if take_id and len(self.takes) > 1 and not any(t.get("take") == take_id for t in self.tracks):
+            self.takes = [t for t in self.takes if t["id"] != take_id]
+            self.canvas.set_takes(self.takes)
         # colours are STABLE per track — do NOT re-assign them here (removing one keeps the rest).
         self.canvas.active = min(self.canvas.active, len(self.tracks) - 1)
         for i, r in enumerate(self._rows):
             r._refresh_style(i == self.canvas.active)
-        self._sel_take_rows()
+        self._sync_sel_take(); self._sel_take_rows()
         self.canvas.active_changed.emit(self.canvas.active); self._refresh()
         self.tracks_changed.emit(lane_id)              # tell the Studio to drop this lane
 
