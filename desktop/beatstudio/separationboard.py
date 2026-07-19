@@ -2200,20 +2200,20 @@ class SeparationBoard(QWidget):
         self.record_track.emit(tr.get("take", ""))
 
     def midi_mix(self, knob_idx, value):
-        """A keyboard knob → the SELECTED track's MIX knob (volume/EQ/fx). The APC knobs are RELATIVE
-        encoders (2's-complement: 1..63 = CW, 65..127 = CCW), so we accumulate a delta for a SMOOTH
-        sweep instead of jumping to min/max. Moves the on-screen slider AND re-renders."""
+        """A keyboard knob → the SELECTED track's MIX knob. The APC knobs are RELATIVE encoders
+        (2's-complement: 1..63 = CW, 65..127 = CCW), so we accumulate a delta for a smooth sweep. We
+        move the actual SLIDER (via setValue), which fires its normal handler → the value NUMBER and the
+        track['mix'] and the re-render all update, exactly like dragging it with the mouse."""
         if not (0 <= self.canvas.active < len(self.tracks)) or knob_idx >= len(MIX_KNOBS):
             return
-        tr = self.tracks[self.canvas.active]
+        row = self._rows[self.canvas.active]
         key, _, mn, mx, _, scale = MIX_KNOBS[knob_idx]
-        mix = tr.setdefault("mix", default_mix())
+        sld = getattr(row, "_mix_sliders", {}).get(key)
+        if sld is None:
+            return
         delta = value if value < 64 else value - 128     # relative encoder → signed step
-        step = (mx - mn) / 96.0                           # ~a smooth turn covers the range
-        sv = max(mn, min(mx, mix.get(key, 0.0) * scale + delta * step))
-        mix[key] = sv / scale
-        self._rows[self.canvas.active].set_mix_display(key, int(round(sv)))
-        self._on_row_changed(tr)
+        step = max(1, round((mx - mn) / 96.0))
+        sld.setValue(max(mn, min(mx, sld.value() + delta * step)))   # → the slider's handler does the rest
 
     def set_take_buf(self, take_id, buf):
         """Replace a soundwave's audio (a per-track recording landed). Keeps all takes the same length."""

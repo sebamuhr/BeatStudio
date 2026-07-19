@@ -209,6 +209,9 @@ class MainWindow(QMainWindow):
         self._sel_syncing = False     # reentrancy guard for linked beat selection
         self._sync_commit = QTimer(self); self._sync_commit.setSingleShot(True)
         self._sync_commit.setInterval(400); self._sync_commit.timeout.connect(self._commit)
+        # a live pad loop re-renders (mix/pattern edits) at the next loop boundary — debounced
+        self._loop_refresh = QTimer(self); self._loop_refresh.setSingleShot(True)
+        self._loop_refresh.setInterval(180); self._loop_refresh.timeout.connect(self._refresh_looping_voices)
         self._samples = self.library.samples_dict()
         self._timer = QTimer(self); self._timer.setInterval(16)
         self._timer.timeout.connect(self._tick)
@@ -838,8 +841,22 @@ class MainWindow(QMainWindow):
             self.timeline.set_project(self.project)
             self.headers.update(); self.toolbar.refresh_info(); self._rerender_if_playing()
             self._sync_commit.start()                        # debounce → one undo entry per gesture
+            if self._looper.active():                        # a live loop should pick up the edit
+                self._loop_refresh.start()
         finally:
             self._syncing = False
+
+    def _refresh_looping_voices(self):
+        """Re-render any pad loop that's playing so mix/pattern edits take effect (swapped at the loop
+        boundary so it stays on beat)."""
+        b = self._board
+        if b is None:
+            return
+        for col in list(self._looper.active()):
+            if col < len(b.tracks):
+                s = self._loop_sample(b.tracks[col])
+                if s is not None and len(s):
+                    self._looper.set_voice(col, s, quantized=True)
 
     def _sync_all_tracks(self):
         board_ids = {tr.get("lane_id") for tr in self._board.tracks}

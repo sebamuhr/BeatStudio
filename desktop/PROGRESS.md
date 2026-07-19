@@ -4,6 +4,18 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.39.1 — MIX knobs actually connected: numbers update + live loop re-renders
+User: "the sliders work but aren't connected to their effects / not changing the numbers." Two gaps:
+- **Keyboard knob didn't update the number.** `midi_mix` set the value + moved the slider with
+  `blockSignals`, so the slider's handler (which updates the value LABEL + `track['mix']` + emits) never
+  fired. Now `midi_mix` just drives the SLIDER via `setValue`, so the keyboard path is identical to a
+  mouse drag — the number, the stored mix, and the re-render all update (verified: knob 100→136 shows 136).
+- **A live pad loop is a cached buffer**, so mix/pattern edits weren't heard. Added a debounced
+  `_refresh_looping_voices` (180 ms) off `_on_board_track_changed`: any column that's looping re-renders and
+  the new buffer swaps in at the **next loop boundary** (quantized, stays on beat). (`apply_mix` itself was
+  already correct — EQ/reverb/volume/comp all change the render.)
+- 32 checks green.
+
 ## v0.39.0 — VARIATIONS (row = variation) · pads loop the INSTRUMENT pattern · quantized switching
 Completes the live-performance model the user described.
 - **Pads loop the INSTRUMENT pattern, not the raw recording.** `_loop_sample` now renders the track through
