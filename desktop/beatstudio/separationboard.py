@@ -130,6 +130,7 @@ class CurveCanvas(QWidget):
     take_selected = Signal(int)   # a soundwave's checkbox was ticked → scope everything to that take
     take_flag = Signal(int, str)  # a soundwave's Solo/Mute button was toggled (index, "solo"|"mute")
     take_rename = Signal(int)     # double-clicked a soundwave's name → rename it
+    loop_changed = Signal(int)    # the Loop tool set a soundwave's loop region (take index)
 
     def __init__(self, buf, sr, bpm, tracks, parent=None):
         super().__init__(parent)
@@ -140,7 +141,8 @@ class CurveCanvas(QWidget):
         self.sel_pts = set()      # ids of anchors currently highlighted (linked selection)
         self.view0, self.view1 = 0.0, 1.0
         self.playhead = None                      # take-fraction 0..1, or None
-        self.tool = "pen"                          # pen (draw) | grid (stretch tempo) | fit (stretch audio)
+        self.tool = "pen"                          # pen | grid (tempo) | fit (audio) | loop (sample region)
+        self._loop_drag = None                     # take-fraction where a Loop drag started
         self._grid_grab = None                     # (grabbed beat number) while STRETCHING the grid
         self.grid_off = 0.0                        # grid phase offset in SECONDS (moves the grid sideways)
         self._grid_pan = None                      # (start-x, start-offset) while MOVING the grid
@@ -178,6 +180,8 @@ class CurveCanvas(QWidget):
             self.takes.append({"id": tk["id"], "buf": b, "color": tk.get("color", take_color(len(self.takes))),
                                "name": tk.get("name", f"Take {len(self.takes)+1}"),
                                "solo": bool(tk.get("solo", False)), "muted": bool(tk.get("muted", False)),
+                               "mode": tk.get("mode", "volume"),
+                               "loop_a": tk.get("loop_a"), "loop_b": tk.get("loop_b"),   # sample loop region (0..1)
                                "gpeak": float(np.abs(b).max()) + 1e-9,
                                "pitch": self._ribbon_for(b),
                                "peaks": self._peaks_over(b, 0.0, 1.0, 1400)})
@@ -523,6 +527,7 @@ class CurveCanvas(QWidget):
         p.fillRect(self.rect(), QColor("#0c0c14"))
         if self.mode == "notes":
             self._paint_notes(p, x0, x1)
+            ny0, ny1 = self._notes_plot(); self._paint_loop(p, ny0, ny1)
             self._paint_navigator(p); p.end(); return
         dur = len(self.buf) / self.sr; beat_len = 60.0 / self.bpm
         y_top = self._band(0)[0]; y_bot = self._band(len(self.takes) - 1)[0] + self._band(len(self.takes) - 1)[1]
@@ -689,6 +694,7 @@ class CurveCanvas(QWidget):
             p.drawRoundedRect(QRectF(bx, by, tw, 20), 5, 5)
             p.setPen(QPen(QColor("#ffffff"), 1)); p.drawText(QRectF(bx, by, tw, 20), Qt.AlignCenter, txt)
 
+        self._paint_loop(p, y_top, y_bot)
         self._paint_navigator(p); p.end()
 
     def _paint_notes(self, p, x0, x1):
@@ -982,6 +988,65 @@ class CurveCanvas(QWidget):
                 self.fit_applied.emit(float(self.fit_a), float(self._fit_b0), float(self.fit_b))
             self.fit_a = self.fit_b = self._fit_b0 = None      # applied → clear (board rebuilds)
 
+    # --- Loop tool: drag to mark THIS soundwave's loop region (the sample a pad plays) ---
+    def _sel_tk(self):
+        ab = self._active_band()
+        return self.takes[ab] if 0 <= ab < len(self.takes) else None
+
+    def _paint_loop(self, p, y0, y1):
+        """Shade the SELECTED soundwave's loop region (the sample a pad plays) + dim outside it."""
+        tk = self._sel_tk()
+        if not tk or tk.get("loop_a") is None or tk.get("loop_b") is None:
+            return
+        a, b = float(tk["loop_a"]), float(tk["loop_b"])
+        if b <= a:
+            return
+        x0, x1 = self._xspan()
+        xa = max(x0, min(x1, self._to_px_t(a))); xb = max(x0, min(x1, self._to_px_t(b)))
+        p.fillRect(QRectF(x0, y0, xa - x0, y1 - y0), QColor(0, 0, 0, 96))    # dim before
+        p.fillRect(QRectF(xb, y0, x1 - xb, y1 - y0), QColor(0, 0, 0, 96))    # dim after
+        p.fillRect(QRectF(xa, y0, xb - xa, y1 - y0), QColor(61, 214, 255, 26))
+        p.setPen(QPen(theme.ACCENT_CY, 2))
+        p.drawLine(QPointF(xa, y0), QPointF(xa, y1)); p.drawLine(QPointF(xb, y0), QPointF(xb, y1))
+        p.setFont(theme.sans(9, 700)); p.setPen(QPen(theme.ACCENT_CY, 1))
+        p.drawText(QRectF(xa, y0 + 1, xb - xa, 14), Qt.AlignCenter, "⟳ LOOP")
+
+    def _loop_press(self, ev, pos):
+        if ev.button() == Qt.RightButton:                     # right-click clears the loop
+            tk = self._sel_tk()
+            if tk is not None:
+                tk["loop_a"] = tk["loop_b"] = None
+                self.loop_changed.emit(self._active_band())
+            self.update(); return
+        self._loop_drag = self._t_at_x(pos.x())
+        tk = self._sel_tk()
+        if tk is not None:
+            tk["loop_a"] = tk["loop_b"] = self._loop_drag
+        self.update()
+
+    def _loop_move(self, pos):
+        if self._loop_drag is None:
+            return
+        tk = self._sel_tk()
+        if tk is not None:
+            tk["loop_b"] = self._t_at_x(pos.x())
+        self.update()
+
+    def _loop_release(self):
+        if self._loop_drag is None:
+            return
+        self._loop_drag = None
+        tk = self._sel_tk()
+        if tk is not None and tk.get("loop_a") is not None:
+            a, b = tk["loop_a"], tk.get("loop_b", tk["loop_a"])
+            a, b = min(a, b), max(a, b)
+            if b - a < 0.01:                                  # a tiny drag = clear (loop the whole take)
+                tk["loop_a"] = tk["loop_b"] = None
+            else:
+                tk["loop_a"], tk["loop_b"] = a, b
+        self.loop_changed.emit(self._active_band())
+        self.update()
+
     def mousePressEvent(self, ev):
         pos = ev.position()
         if ev.button() == Qt.LeftButton:
@@ -998,6 +1063,8 @@ class CurveCanvas(QWidget):
             if ev.button() == Qt.LeftButton:
                 self._pan_mm = True; r = self._mm_rect(); self._center_on((pos.x() - r.left()) / r.width()); self.update()
             return
+        if self.tool == "loop":                    # set the sample loop region (works in both views)
+            self._loop_press(ev, pos); return
         if self.mode == "notes":
             self._notes_press(ev, pos); return
         if self.tool == "grid":
@@ -1145,6 +1212,8 @@ class CurveCanvas(QWidget):
 
     def mouseMoveEvent(self, ev):
         pos = ev.position()
+        if self.tool == "loop":
+            self._loop_move(pos); return
         if self.mode == "notes":
             self._notes_move(ev, pos); return
         self._update_hover(pos)
@@ -1156,6 +1225,9 @@ class CurveCanvas(QWidget):
             return
         if self.tool == "fit":
             self._fit_move(pos)
+            return
+        if self.tool == "loop":
+            self._loop_move(pos)
             return
         if self._drag is None:
             return
@@ -1176,6 +1248,8 @@ class CurveCanvas(QWidget):
             self._emit_clock.restart(); self.edited.emit(ti)
 
     def mouseReleaseEvent(self, _):
+        if self.tool == "loop":
+            self._loop_release(); self._pan_mm = False; return
         if self.mode == "notes":
             if self._note_drag is not None:
                 ti = self._note_drag[0]; self._note_drag = None
@@ -1601,6 +1675,7 @@ class SeparationBoard(QWidget):
     record_requested = Signal()          # ● Record main (the primary take) — legacy, unused
     record_secondary_requested = Signal()  # ● Record secondary (overdub) — legacy, unused
     record_track = Signal(str)           # ● on a track row → record a guide into that soundwave (take id)
+    loop_region_changed = Signal(str)    # the Loop tool changed a soundwave's loop region (take id)
     tracks_changed = Signal(str)         # a track/points changed → live-sync that lane (id, "" = all)
     take_audio_changed = Signal()        # the take WAVEFORM itself changed (Fit stretch / delete) → resync audio
     bpm_changed = Signal(int)            # the board's BPM box changed → sync the Studio
@@ -1668,7 +1743,8 @@ class SeparationBoard(QWidget):
         self._tool_btns = {}
         for name, glyph, tip in (("pen", "✎ Pen", "Draw sounds — place points on the wave"),
                                  ("grid", "⇋ Grid", "Left-drag = stretch/shrink tempo · Right-drag = move the grid"),
-                                 ("fit", "⤢ Fit", "Pick two points on the wave, then drag to stretch/shrink that audio")):
+                                 ("fit", "⤢ Fit", "Pick two points on the wave, then drag to stretch/shrink that audio"),
+                                 ("loop", "⟳ Loop", "Drag to set THIS soundwave's loop region — the sample a pad plays")):
             b = QPushButton(glyph); b.setCursor(Qt.PointingHandCursor); b.setFixedHeight(30); b.setToolTip(tip)
             b.clicked.connect(lambda _=False, n=name: self._set_tool(n))
             self._tool_btns[name] = b; top.addWidget(b)
@@ -1705,6 +1781,7 @@ class SeparationBoard(QWidget):
         self.canvas.take_selected.connect(self._on_take_selected)
         self.canvas.take_flag.connect(self._on_take_flag)
         self.canvas.take_rename.connect(self._on_take_rename)
+        self.canvas.loop_changed.connect(self._on_loop_changed)
         self._set_tool("pen")
         self._set_mode("volume")
 
@@ -1889,7 +1966,8 @@ class SeparationBoard(QWidget):
             t["color"] = tr["color"].name()
             tracks.append(t)
         takes = [{"id": tk["id"], "name": tk["name"], "color": tk["color"].name(), "buf": tk["buf"],
-                  "solo": tk.get("solo", False), "muted": tk.get("muted", False)}
+                  "solo": tk.get("solo", False), "muted": tk.get("muted", False),
+                  "loop_a": tk.get("loop_a"), "loop_b": tk.get("loop_b"), "mode": tk.get("mode", "volume")}
                  for tk in self.takes]                                          # buf by reference (cheap)
         return {"tracks": tracks, "takes": takes, "active_take": self._active_take,
                 "bpm": self.bpm, "n": self._n, "color_seq": self._color_seq,
@@ -1901,7 +1979,8 @@ class SeparationBoard(QWidget):
             self._list.removeWidget(row); row.deleteLater()
         self._rows = []
         self.takes = [{"id": tk["id"], "buf": tk["buf"], "color": QColor(tk["color"]), "name": tk["name"],
-                       "solo": tk.get("solo", False), "muted": tk.get("muted", False)}
+                       "solo": tk.get("solo", False), "muted": tk.get("muted", False),
+                       "loop_a": tk.get("loop_a"), "loop_b": tk.get("loop_b"), "mode": tk.get("mode", "volume")}
                       for tk in blob["takes"]]
         if self.takes:
             self.buf = self.takes[0]["buf"]
@@ -2121,6 +2200,14 @@ class SeparationBoard(QWidget):
         self.canvas.update()
         self._refresh_row_flags()
         self.tracks_changed.emit("")                   # render respects the new solo/mute
+
+    def _on_loop_changed(self, ti):
+        """The Loop tool set a soundwave's loop region on the canvas copy → mirror it onto the board
+        take (so it saves / round-trips) and tell the Studio (a live loop may need to restart)."""
+        if 0 <= ti < len(self.takes) and ti < len(self.canvas.takes):
+            self.takes[ti]["loop_a"] = self.canvas.takes[ti].get("loop_a")
+            self.takes[ti]["loop_b"] = self.canvas.takes[ti].get("loop_b")
+        self.loop_region_changed.emit(self.takes[ti]["id"] if 0 <= ti < len(self.takes) else "")
 
     def _on_take_rename(self, ti):
         """Double-click a soundwave name → rename the take (shown in both views)."""

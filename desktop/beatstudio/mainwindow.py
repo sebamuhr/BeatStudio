@@ -13,7 +13,7 @@ from .timeline import TimelineView
 from .ruler import Ruler
 from .headers import TrackHeaders
 from .toolbar import Toolbar
-from .audio import AudioEngine
+from .audio import AudioEngine, Looper
 from .render import render_project, _voice_for
 from . import synth
 from .synth import SR, click as synth_click
@@ -192,6 +192,8 @@ class MainWindow(QMainWindow):
 
         # transport + audio
         self.engine = AudioEngine()
+        self._looper = Looper()       # live multi-loop pad performance (columns loop together)
+        self._loop_row = {}           # column -> the row (variation) currently looping, for LED blink
         self.recorder = Recorder()
         self._rec_lane = None
         self._orig_rec = None       # whole-groove master take
@@ -237,24 +239,50 @@ class MainWindow(QMainWindow):
             self._midi_relight()
 
     def _midi_relight(self):
-        """Light the grid: each column = a track (its colour); columns with no track are dark. The
-        selected track's column pulses; the track buttons under live columns are lit."""
+        """Light the grid: each column = a track (its colour); columns with no track are dark. A column
+        that's LOOPING has its playing pad blink; the selected track's column pulses."""
         if not getattr(self, "_midi", None) or not self._midi.connected:
             return
-        from .midi import LED_SOLID, LED_PULSE
+        from .midi import LED_SOLID, LED_PULSE, LED_BLINK
         b = self._board
         ntr = len(b.tracks) if b is not None else 0
         active = b.canvas.active if b is not None else -1
         for idx in range(40):
-            col = idx % 8
-            if col < ntr:
+            col = idx % 8; row = idx // 8
+            if col >= ntr:
+                self._midi.light_pad(idx, "off"); continue
+            if self._looper.is_on(col) and self._loop_row.get(col) == row:
+                self._midi.light_pad(idx, "white", LED_BLINK)          # the pad that's looping
+            else:
                 self._midi.light_pad(idx, self._PAD_COLS[col],
                                      LED_PULSE if col == active else LED_SOLID)
-            else:
-                self._midi.light_pad(idx, "off")
         for i in range(8):
             self._midi.light_button(f"track{i + 1}", i < ntr)
         self._midi.light_button("play", self._timer.isActive())
+
+    def _on_loop_region(self, take_id):
+        """A soundwave's loop region changed → if a pad is looping that column, restart it seamlessly
+        with the new region so the sample updates live."""
+        b = self._board
+        if b is None:
+            return
+        for col, tr in enumerate(b.tracks):
+            if col < 8 and tr.get("take") == take_id and self._looper.is_on(col):
+                s = self._loop_sample(tr)
+                if s is not None and len(s):
+                    self._looper.set_voice(col, s)
+
+    def _loop_sample(self, tr):
+        """The audio a pad loops = the track's soundwave, cropped to its loop region (whole take if none)."""
+        b = self._board
+        tk = next((t for t in b.takes if t["id"] == tr.get("take")), None) if b is not None else None
+        if tk is None:
+            return None
+        buf = tk["buf"]; n = len(buf)
+        a, bb = tk.get("loop_a"), tk.get("loop_b")
+        if a is not None and bb is not None and bb > a and n:
+            return buf[int(a * n):max(int(a * n) + 1, int(bb * n))]
+        return buf
 
     def _midi_note_on(self, midi, vel):
         """A key on the APC keybed → play the SELECTED track's instrument at that pitch."""
@@ -285,30 +313,26 @@ class MainWindow(QMainWindow):
             self._board.midi_mix(idx, value)
 
     def _midi_pad(self, index, pressed):
-        """Pad (col = track) → play that track's WHOLE pattern/sample (not one beat); blink while it
-        plays. (Row will select a VARIATION once that lands; for now any pad in a column plays it.)"""
+        """Pad = a live LOOP. col = track (a grid column), row = which row is playing. Press to start
+        the track's sample looping; press again to stop. Only ONE row per column plays; pressing a
+        different row switches it. Many columns loop together (they mix). Row→variation lands later."""
+        if not pressed:
+            return                                        # toggle happens on press (clip-launcher style)
         b = self._board
-        col = index % 8
-        if not pressed:                                  # restore the pad's column colour
-            if b is not None and col < len(b.tracks):
-                from .midi import LED_SOLID, LED_PULSE
-                beh = LED_PULSE if col == b.canvas.active else LED_SOLID
-                self._midi.light_pad(index, self._PAD_COLS[col], beh)
-            else:
-                self._midi.light_pad(index, "off")
-            return
+        col = index % 8; row = index // 8
         if b is None or col >= len(b.tracks):
             return
-        tr = b.tracks[col]
-        if col != b.canvas.active:
-            b.canvas.set_active(col)                      # focus the column's track (relights grid)
-        from .midi import LED_BLINK
-        self._midi.light_pad(index, "white", LED_BLINK)  # BLINK the pad while its sound plays
-        lane, events = b._lane_events(tr)
-        if lane and events:
-            self._preview_pattern([lane], events)         # play the whole pattern (the sample)
-        else:                                             # nothing drawn yet → play the guide recording
-            self._preview_original()
+        b.canvas.set_active(col)                          # focus the column's track
+        # pressing the row that's already looping → stop this column
+        if self._looper.is_on(col) and self._loop_row.get(col) == row:
+            self._looper.stop_voice(col); self._loop_row.pop(col, None)
+            self._midi_relight(); return
+        sample = self._loop_sample(b.tracks[col])
+        if sample is None or not len(sample):
+            self._preview_original(); return              # nothing to loop (silent take) — audition
+        self._looper.set_voice(col, sample)               # start / switch this column's loop
+        self._loop_row[col] = row
+        self._midi_relight()
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
@@ -664,6 +688,7 @@ class MainWindow(QMainWindow):
         board.record_requested.connect(self._toggle_master_record)
         board.record_secondary_requested.connect(self._toggle_secondary_record)
         board.record_track.connect(self._toggle_track_record)
+        board.loop_region_changed.connect(self._on_loop_region)
         board.tracks_changed.connect(self._on_board_track_changed)
         board.take_audio_changed.connect(self._on_take_audio_changed)
         board.bpm_changed.connect(self._on_board_bpm)
@@ -1252,6 +1277,8 @@ class MainWindow(QMainWindow):
         would otherwise keep the app alive)."""
         if self._board is not None:
             self._board.close(); self._board.deleteLater(); self._board = None
+        if getattr(self, "_looper", None) is not None:
+            self._looper.stop_all()
         if getattr(self, "_midi", None) is not None:
             self._midi.clear(); self._midi.stop()
         super().closeEvent(ev)

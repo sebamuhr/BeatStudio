@@ -386,6 +386,34 @@ w._midi_button("track1", True)                          # a Track button selects
 bd._delete_track(_mt)
 print("MIDI ok: 1-track-per-column grid; knobs drive the instrument (not tempo); handlers/LEDs safe")
 
+# LOOP TOOL: drag in Loop mode marks a soundwave's loop region; a pad loops that region; the
+# multi-voice Looper mixes several columns; changing the region restarts a live loop.
+from beatstudio.audio import Looper as _Looper
+bd._set_tool("loop"); cvl = bd.canvas
+bd.add_track(); ltr = bd.tracks[-1]; lka = next(i for i, t in enumerate(bd.takes) if t["id"] == ltr["take"])
+bd.canvas.set_sel_take(lka)
+bd.takes[lka]["buf"][:] = (0.3 * np.random.randn(len(bd.takes[lka]["buf"]))).astype("float32")
+cvl.set_takes(bd.takes)
+xa = cvl._to_px_t(0.25); xb = cvl._to_px_t(0.6); ymid = cvl.height() / 2
+cvl.mousePressEvent(E(xa, ymid)); cvl.mouseMoveEvent(E(xb, ymid)); cvl.mouseReleaseEvent(None)
+app.processEvents()
+assert bd.takes[lka]["loop_a"] is not None and bd.takes[lka]["loop_b"] > bd.takes[lka]["loop_a"], \
+    "Loop drag did not set the soundwave's loop region"
+# the pad loops that region (a slice of the take), not the whole take
+_smp = w._loop_sample(ltr)
+assert _smp is not None and 0 < len(_smp) < len(bd.takes[lka]["buf"]), "loop sample is not the region slice"
+# the multi-voice Looper mixes voices (offscreen: no stream, but voice bookkeeping works)
+_lp = _Looper(); _lp.available = False
+_lp.set_voice(0, _smp); _lp.set_voice(1, _smp)
+assert _lp.active() == {0, 1}, "Looper did not track two simultaneous voices"
+_lp.stop_voice(0); assert _lp.active() == {1}; _lp.stop_all(); assert _lp.active() == set()
+# right-click clears the loop region
+bd.canvas.set_sel_take(lka)
+cvl.mousePressEvent(E(cvl._to_px_t(0.4), ymid, btn=Qt.RightButton)); app.processEvents()
+assert bd.takes[lka]["loop_a"] is None, "right-click did not clear the loop region"
+bd._set_tool("pen"); bd._delete_track(ltr)
+print("LOOP TOOL ok: per-soundwave loop region (drag/clear) + region sample + multi-voice Looper")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

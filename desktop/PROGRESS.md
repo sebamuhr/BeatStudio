@@ -4,6 +4,27 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.38.0 — THE LOOP TOOL: per-soundwave loop region + live multi-loop pads (finally!)
+The tool the user asked for repeatedly. Mark a loop region on any soundwave (like the Studio ruler loop),
+and the APC pads loop those samples together — a live clip-launcher.
+- **Loop tool** (`⟳ Loop` in the board toolbar). Drag on a soundwave to mark its **loop region**
+  (`_loop_press/_loop_move/_loop_release`); right-click clears it. Stored per take (`loop_a`/`loop_b`,
+  0..1 fractions), shaded on the wave with cyan edges + a `⟳ LOOP` label, dimmed outside
+  (`_paint_loop`, both Volume and Notes views). Round-trips in snapshot/restore. Works in either view.
+- **Live multi-loop pads.** New `audio.Looper` = a mixing multi-voice looper (one shared OutputStream sums
+  N seamless loops). Each grid **column = a track/voice**: pressing a pad starts that track's **sample
+  (its loop region of the soundwave) looping**; pressing it again stops; **many columns loop together**.
+  `_midi_pad` toggles a voice; `_loop_sample` slices the take to its loop region (whole take if unset);
+  `_on_loop_region` restarts a live loop when its region is edited. The playing pad **blinks**.
+- Verified on hardware: two columns loop together, re-press stops one. `board_check` **LOOP TOOL** check
+  (drag sets region, region-slice sample, multi-voice Looper, right-click clear); 31 checks green.
+  Screenshot `scratchpad/loop_tool.png`.
+- **STILL NOT BUILT — per-track VARIATIONS (row = variation):** each column's 5 rows should be main + up to
+  4 variations (alternate patterns) that live INSIDE the track; a "+ variation" button adds one; pressing a
+  different row switches which one loops (change the bassline live). The looper already keys on column
+  (one voice per column) and `_loop_row` tracks the active row, so variations slot in on top. Needs
+  `track["variations"]` + active index + the +button + row→variation in `_midi_pad`. **Build next.**
+
 ## v0.37.1 — smooth (relative) knobs · pads play the whole pattern · Solo/Mute off the soundwave
 - **Knobs are RELATIVE encoders.** The APC knobs send 2's-complement deltas (1..63 CW, 65..127 CCW), so
   reading them as absolute made them slam to min/max. `board.midi_mix` now ACCUMULATES a signed delta

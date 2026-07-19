@@ -114,3 +114,66 @@ class AudioEngine:
             pos = len(self._buf)
         self._cursor = pos
         return pos
+
+
+class Looper:
+    """A live multi-voice LOOPER for the pad grid: several sample loops play together and each one
+    loops seamlessly. Each 'voice' is one grid column (a track); setting a voice swaps its sample
+    (main ↔ variation). One shared output stream mixes all active voices."""
+    def __init__(self):
+        self.available = sd is not None
+        self._voices = {}          # id -> {"buf": float32, "pos": int}
+        self._stream = None
+
+    def _ensure_stream(self):
+        if not self.available or self._stream is not None:
+            return
+        try:
+            self._stream = sd.OutputStream(samplerate=SR, channels=1, dtype="float32",
+                                           blocksize=512, callback=self._cb)
+            self._stream.start()
+        except Exception:
+            self._stream = None
+
+    def _cb(self, outdata, frames, time_info, status):
+        out = outdata[:, 0]; out[:] = 0.0
+        for v in list(self._voices.values()):
+            buf = v["buf"]; n = len(buf)
+            if n < 1:
+                continue
+            pos = v["pos"]; i = 0
+            while i < frames:
+                take = min(frames - i, n - pos)
+                out[i:i + take] += buf[pos:pos + take]
+                pos += take; i += take
+                if pos >= n:
+                    pos = 0                       # seamless loop
+            v["pos"] = pos
+        np.tanh(out, out=out)                     # soft-clip the sum
+
+    def set_voice(self, vid, buf):
+        """Start/replace a looping voice (swap a column's sample keeps the others going)."""
+        if buf is None or not len(buf):
+            self.stop_voice(vid); return
+        self._voices[vid] = {"buf": np.ascontiguousarray(buf, np.float32), "pos": 0}
+        self._ensure_stream()
+
+    def stop_voice(self, vid):
+        self._voices.pop(vid, None)
+        if not self._voices:
+            self.stop_all()
+
+    def is_on(self, vid):
+        return vid in self._voices
+
+    def active(self):
+        return set(self._voices.keys())
+
+    def stop_all(self):
+        self._voices.clear()
+        if self._stream is not None:
+            try:
+                self._stream.stop(); self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
