@@ -251,15 +251,7 @@ class CurveCanvas(QWidget):
         return s, m
 
     def _hit_take_sm(self, pos):
-        """(take index, 'solo'|'mute') if a Solo/Mute button was clicked, else None. Volume mode."""
-        if self.mode == "notes":
-            return None
-        i = self._active_band()                          # only the selected wave is shown/hittable
-        s, m = self._take_sm_rects(i)
-        if s.contains(pos):
-            return (i, "solo")
-        if m.contains(pos):
-            return (i, "mute")
+        """Solo/Mute moved to the track cards — no longer on the soundwave (kept as a no-op hook)."""
         return None
 
     def _take_name_rect(self, i):
@@ -580,9 +572,7 @@ class CurveCanvas(QWidget):
             p.setFont(theme.sans(9, 700 if sel else 600))
             p.setPen(QPen(QColor(base.red(), base.green(), base.blue(), 235 if sel else 150), 1))
             p.drawText(QRectF(x0 + 24, top + 2, 200, 14), Qt.AlignLeft | Qt.AlignVCenter, tk["name"])
-            s_r, m_r = self._take_sm_rects(i)              # Solo / Mute the whole soundwave
-            self._draw_sm(p, s_r, "S", tk.get("solo"), QColor("#ffd24d"))
-            self._draw_sm(p, m_r, "M", tk.get("muted"), QColor("#ff7a7a"))
+            # (Solo / Mute live on the TRACK CARD now, not on the soundwave — removed from here.)
             self._draw_del_x(p, self._take_del_rect(i))    # ✕ delete this whole soundwave (+ its tracks)
 
         # bar + beat lines span every row (shifted by the grid offset)
@@ -2049,16 +2039,19 @@ class SeparationBoard(QWidget):
         self.record_track.emit(tr.get("take", ""))
 
     def midi_mix(self, knob_idx, value):
-        """A keyboard knob (0..7, value 0..127) → the SELECTED track's MIX knob (volume/EQ/fx). Updates
-        the on-screen slider AND re-renders so you hear it."""
+        """A keyboard knob → the SELECTED track's MIX knob (volume/EQ/fx). The APC knobs are RELATIVE
+        encoders (2's-complement: 1..63 = CW, 65..127 = CCW), so we accumulate a delta for a SMOOTH
+        sweep instead of jumping to min/max. Moves the on-screen slider AND re-renders."""
         if not (0 <= self.canvas.active < len(self.tracks)) or knob_idx >= len(MIX_KNOBS):
             return
         tr = self.tracks[self.canvas.active]
         key, _, mn, mx, _, scale = MIX_KNOBS[knob_idx]
-        sv = mn + (mx - mn) * max(0, min(127, value)) / 127.0
-        tr.setdefault("mix", default_mix())[key] = sv / scale
-        row = self._rows[self.canvas.active]
-        row.set_mix_display(key, int(round(sv)))
+        mix = tr.setdefault("mix", default_mix())
+        delta = value if value < 64 else value - 128     # relative encoder → signed step
+        step = (mx - mn) / 96.0                           # ~a smooth turn covers the range
+        sv = max(mn, min(mx, mix.get(key, 0.0) * scale + delta * step))
+        mix[key] = sv / scale
+        self._rows[self.canvas.active].set_mix_display(key, int(round(sv)))
         self._on_row_changed(tr)
 
     def set_take_buf(self, take_id, buf):

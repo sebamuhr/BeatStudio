@@ -307,10 +307,8 @@ bd.add_track(); wa = bd.tracks[-1]; kwa = next(i for i, t in enumerate(bd.takes)
 bd.add_track(); wb = bd.tracks[-1]; kwb = next(i for i, t in enumerate(bd.takes) if t["id"] == wb["take"])
 wa["points"] = [{"id": "wc1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
 wb["points"] = [{"id": "wc2", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
-bd.canvas.set_sel_take(kwa)                            # only the SELECTED wave is shown/hittable now
-s_r, m_r = cvw._take_sm_rects(kwa)
-assert cvw._hit_take_sm(s_r.center()) == (kwa, "solo") and cvw._hit_take_sm(m_r.center()) == (kwa, "mute"), \
-    "Solo/Mute buttons not hittable"
+bd.canvas.set_sel_take(kwa)
+assert cvw._hit_take_sm(QPointF(0, 0)) is None, "Solo/Mute must be OFF the soundwave now (on the cards)"
 bd._on_take_flag(kwa, "mute"); assert bd.takes[kwa]["muted"], "wave mute did not set on the take"
 lane_m, _ = bd._lane_events(wa); assert lane_m.muted, "a muted wave's track did not inherit mute"
 bd._on_take_flag(kwa, "mute")
@@ -372,11 +370,13 @@ _mc = MidiController(); _mc.light_pad(0, "red"); _mc.light_button("play", True);
 bd.add_track(); _mt = bd.tracks[-1]; _mt["kind"] = "hum"; _mt["sound"] = "aah"
 bd.canvas.set_active(bd.tracks.index(_mt))
 w._midi_note_on(60, 100)                                # keybed → audition the selected instrument
-_v0 = (_mt.get("mix") or {}).get("volume"); w._midi_knob(0, 20)   # knob 1 = MIX Volume
-assert _mt["mix"]["volume"] != _v0, "knob did not drive the track MIX (volume)"
-_bpm0 = w.toolbar.bpm.value(); w._midi_knob(5, 100)     # knob 6 = MIX Reverb
+# APC knobs are RELATIVE encoders: 1..63 = clockwise (up), 65..127 = counter-clockwise (down).
+_v0 = (_mt.get("mix") or {}).get("volume"); w._midi_knob(0, 40)   # knob 1 CW = MIX Volume up
+assert _mt["mix"]["volume"] > _v0, "CW knob did not raise the track MIX volume"
+w._midi_knob(0, 100); assert _mt["mix"]["volume"] < 1.5, "CCW knob (value 100) did not lower it back"
+_bpm0 = w.toolbar.bpm.value(); w._midi_knob(5, 50)     # knob 6 CW = MIX Reverb up
 assert w.toolbar.bpm.value() == _bpm0, "knob must NOT change tempo any more (that broke the grid)"
-assert _mt["mix"]["reverb"] > 0, "knob 6 did not set MIX reverb"
+assert _mt["mix"]["reverb"] > 0, "knob 6 did not raise MIX reverb"
 # the MIX is carried onto the lane for render
 _mt["points"] = [{"id": "mx", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
 _ml, _me = bd._lane_events(_mt)

@@ -4,6 +4,17 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.37.1 — smooth (relative) knobs · pads play the whole pattern · Solo/Mute off the soundwave
+- **Knobs are RELATIVE encoders.** The APC knobs send 2's-complement deltas (1..63 CW, 65..127 CCW), so
+  reading them as absolute made them slam to min/max. `board.midi_mix` now ACCUMULATES a signed delta
+  (`step=(mx-mn)/96`) → a smooth sweep (verified on hardware: 1.03→1.31 monotonic over 10 small steps).
+- **Pads play the WHOLE pattern**, not one beat: `_midi_pad` renders the column's track (`_lane_events` →
+  `_preview_pattern`) and plays the whole groove (falls back to the guide recording if nothing's drawn).
+  (Full "play a selected region as the sample" arrives with the select-area tool — Phase 2.)
+- **Solo/Mute removed from the soundwave card** (they live on the track cards now) — `_draw_sm` for takes
+  gone, `_hit_take_sm` is a no-op; the ✕ + name stay.
+- board_check updated (relative-knob CW/CCW, S/M off the wave); 30 checks green.
+
 ## v0.37.0 — show ONLY the selected soundwave · 8-knob per-track MIX (APC knobs) · pads blink
 Three of four user asks (the 4th — per-track VARIATIONS — is next, see below).
 - **Show only the SELECTED soundwave.** Volume mode drew every take stacked (confusing). Now `_band` is the

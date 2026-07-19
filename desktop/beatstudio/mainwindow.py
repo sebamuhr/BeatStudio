@@ -285,9 +285,10 @@ class MainWindow(QMainWindow):
             self._board.midi_mix(idx, value)
 
     def _midi_pad(self, index, pressed):
-        """Pad (col=track, row=pitch): play that track's instrument at the row's pitch; flash it."""
+        """Pad (col = track) → play that track's WHOLE pattern/sample (not one beat); blink while it
+        plays. (Row will select a VARIATION once that lands; for now any pad in a column plays it.)"""
         b = self._board
-        col = index % 8; row = index // 8
+        col = index % 8
         if not pressed:                                  # restore the pad's column colour
             if b is not None and col < len(b.tracks):
                 from .midi import LED_SOLID, LED_PULSE
@@ -303,8 +304,11 @@ class MainWindow(QMainWindow):
             b.canvas.set_active(col)                      # focus the column's track (relights grid)
         from .midi import LED_BLINK
         self._midi.light_pad(index, "white", LED_BLINK)  # BLINK the pad while its sound plays
-        prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
-        self._preview_note(tr["kind"], tr["sound"], prm, 48 + self._PAD_LADDER[min(row, 4)])
+        lane, events = b._lane_events(tr)
+        if lane and events:
+            self._preview_pattern([lane], events)         # play the whole pattern (the sample)
+        else:                                             # nothing drawn yet → play the guide recording
+            self._preview_original()
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
