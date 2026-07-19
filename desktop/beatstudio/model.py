@@ -49,6 +49,7 @@ class Lane:
     hi_note: int = 72            # synth siren: pitch at the TOP of the drawn line (morph=1)
     vol_pts: list = field(default_factory=list)         # Studio volume automation [{beat,v}] (0..1.5)
     fx: dict = field(default_factory=dict)              # "Original" FX rack amounts (see synth.FX_KNOBS)
+    mix: dict = field(default_factory=dict)             # per-track 8-knob MIX (see synth.MIX_KNOBS)
     eq: dict = field(default_factory=lambda: {"low": 0, "mid": 0, "high": 0})
     id: str = field(default_factory=lambda: uid("R"))
 

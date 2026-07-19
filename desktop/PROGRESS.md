@@ -4,6 +4,27 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.37.0 — show ONLY the selected soundwave · 8-knob per-track MIX (APC knobs) · pads blink
+Three of four user asks (the 4th — per-track VARIATIONS — is next, see below).
+- **Show only the SELECTED soundwave.** Volume mode drew every take stacked (confusing). Now `_band` is the
+  full plot area and the paint/hit-tests are gated to `_active_band()`, so selecting a track on the left
+  shows ONLY its wave (fills the canvas). Notes mode was already single-take. Switch waves via the left
+  track list (or the notes take-chips).
+- **8-knob per-track MIX**, mapped 1:1 to the APC knobs (`synth.MIX_KNOBS`/`default_mix`/`apply_mix`):
+  **Volume · High · Mid · Low · Balance · Reverb · Gain · Comp**. Shown as sliders on the SELECTED track
+  card only (`TrackRow.mixpanel`, revealed by `set_active`). A keyboard knob → `board.midi_mix` moves the
+  on-screen slider AND re-renders (`Lane.mix`, applied in `render` via `apply_mix` = EQ + reverb/drive/comp
+  + volume). Round-trips in persistence. (Balance is stored; mono render for now.)
+- **Pads BLINK while playing** (`LED_BLINK`) instead of a static flash; restore their column colour on
+  release.
+- Verified: `board_check` MIDI check rewritten (knob→MIX, not tempo/instrument); 30 checks green.
+  Screenshot `scratchpad/mix_view.png` (one wave + the MIX panel).
+- **NEXT — per-track VARIATIONS (user, biggest ask):** a track holds a LIST of variations (alternate
+  beat/note patterns) that play *instead of* the original; an extra "+ variation" button adds one (grows
+  INSIDE the track, not a new track); on the APC each pad DOWN a column = a variation (press to switch the
+  bass line live). Needs: `track["variations"]` + active index, playback/render off the active variation,
+  pad row→variation mapping + lighting, undo/persistence. Design it before building.
+
 ## v0.36.1 — APC grid remap: 1 track per pad column · fixed the disruptive knob/pad behaviour
 User feedback on the raw v0.35 MIDI wiring: "a lot of lights that turn off when clicked, only a few
 buttons work, one knob works but makes the grid fail." Fixes + the user's grid idea:

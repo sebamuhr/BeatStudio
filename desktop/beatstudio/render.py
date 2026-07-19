@@ -160,6 +160,13 @@ def render_project(project, samples=None, tail=0.6, orig=None):
                 lane_buf = np.concatenate([lane_buf, np.zeros(len(buf) - len(lane_buf), np.float32)])
             else:
                 lane_buf = lane_buf[:len(buf)]
+        mix = getattr(lane, "mix", None)               # per-track 8-knob MIX (EQ + fx + volume)
+        if mix:
+            lane_buf = synth.apply_mix(lane_buf, mix)
+            if len(lane_buf) < len(buf):
+                lane_buf = np.concatenate([lane_buf, np.zeros(len(buf) - len(lane_buf), np.float32)])
+            else:
+                lane_buf = lane_buf[:len(buf)]
         gain = _vol_gain(lane, spb, len(lane_buf))
         if gain is not None:
             lane_buf *= gain

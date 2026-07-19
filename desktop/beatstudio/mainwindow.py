@@ -279,20 +279,10 @@ class MainWindow(QMainWindow):
                 b.canvas.set_active(i)                    # active_changed → _midi_relight
 
     def _midi_knob(self, idx, value):
-        """The 8 knobs drive the SELECTED instrument's knob stack (hum/synth). No tempo mapping —
-        that was rescaling the whole grid. Drums/Original have no knobs, so knobs do nothing there."""
-        b = self._board
-        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
-            return
-        tr = b.tracks[b.canvas.active]
-        from .synth import SYNTH_KNOBS, HUM_KNOBS
-        knobs = HUM_KNOBS if tr["kind"] == "hum" else (SYNTH_KNOBS if tr["kind"] == "synth" else None)
-        pkey = "hum_params" if tr["kind"] == "hum" else "params"
-        if not knobs or idx >= len(knobs):
-            return
-        key, _, mn, mx, _, scale = knobs[idx]
-        tr.setdefault(pkey, {})[key] = (mn + (mx - mn) * value / 127) / scale
-        self._on_board_track_changed(tr.get("lane_id", ""))
+        """The 8 knobs drive the SELECTED track's MIX (Volume/High/Mid/Low/Bal/Reverb/Gain/Comp),
+        moving the on-screen slider and re-rendering. No tempo mapping (that broke the grid)."""
+        if self._board is not None:
+            self._board.midi_mix(idx, value)
 
     def _midi_pad(self, index, pressed):
         """Pad (col=track, row=pitch): play that track's instrument at the row's pitch; flash it."""
@@ -311,7 +301,8 @@ class MainWindow(QMainWindow):
         tr = b.tracks[col]
         if col != b.canvas.active:
             b.canvas.set_active(col)                      # focus the column's track (relights grid)
-        self._midi.light_pad(index, "white")             # flash the struck pad
+        from .midi import LED_BLINK
+        self._midi.light_pad(index, "white", LED_BLINK)  # BLINK the pad while its sound plays
         prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
         self._preview_note(tr["kind"], tr["sound"], prm, 48 + self._PAD_LADDER[min(row, 4)])
 

@@ -26,6 +26,7 @@ def to_dict(p: Project) -> dict:
                    "muted": l.muted, "solo": l.solo, "auto": l.auto, "eq": l.eq, "src_master": l.src_master,
                    "color": l.color, "sound_params": l.sound_params, "sound_b_params": l.sound_b_params,
                    "lo_note": l.lo_note, "hi_note": l.hi_note, "vol_pts": l.vol_pts, "fx": l.fx,
+                   "mix": l.mix,
                    "has_original": l.has_original, "play_original": l.play_original} for l in p.lanes],
         "events": [{"id": e.id, "lane_id": e.lane_id, "beat": e.beat, "vel": e.vel,
                     "length": e.length, "pitch": e.pitch, "tune": e.tune, "eq": e.eq,
@@ -58,7 +59,7 @@ def from_dict(d: dict) -> Project:
                             sound_b_params=l.get("sound_b_params") or {},
                             lo_note=int(l.get("lo_note", 48)), hi_note=int(l.get("hi_note", 72)),
                             vol_pts=l.get("vol_pts") or [],
-                            fx=l.get("fx") or {},
+                            fx=l.get("fx") or {}, mix=l.get("mix") or {},
                             eq=l.get("eq") or {"low": 0, "mid": 0, "high": 0}))
     for e in d.get("events", []):
         p.events.append(Event(id=e.get("id"), lane_id=e.get("lane_id") or e.get("laneId"),

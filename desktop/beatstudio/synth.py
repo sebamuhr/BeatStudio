@@ -565,6 +565,39 @@ def default_fx() -> dict:
     return {k: 0.0 for k, *_ in FX_KNOBS}
 
 
+# Per-track MIX — 8 universal controls mapped 1:1 to the 8 knobs on the APC Key 25. Simple mixing
+# any track can use (not instrument-specific): (key, label, min, max, default, scale).
+MIX_KNOBS = [
+    ("volume",  "Volume",  0, 150, 100, 100.0),   # 0..1.5 gain (1.0 = unity)
+    ("high",    "High",  -12,  12,   0,   1.0),   # treble shelf (dB)
+    ("mid",     "Mid",   -12,  12,   0,   1.0),   # mid bell (dB)
+    ("low",     "Low",   -12,  12,   0,   1.0),   # bass shelf (dB)
+    ("balance", "Bal",  -100, 100,   0, 100.0),   # pan −1..1 (stored; mono render for now)
+    ("reverb",  "Reverb",  0, 100,   0, 100.0),   # 0..1 space
+    ("gain",    "Gain",    0, 100,   0, 100.0),   # 0..1 drive
+    ("comp",    "Comp",    0, 100,   0, 100.0),   # 0..1 compression / punch
+]
+
+
+def default_mix() -> dict:
+    return {k: (dflt / sc) for k, _, _, _, dflt, sc in MIX_KNOBS}
+
+
+def apply_mix(x: np.ndarray, mix: dict) -> np.ndarray:
+    """Apply a track's 8-knob MIX (EQ + reverb/drive/comp + volume) to a lane buffer."""
+    if not mix:
+        return x
+    x = apply_eq(x, mix.get("low", 0.0), mix.get("mid", 0.0), mix.get("high", 0.0))
+    mfx = {"drive": mix.get("gain", 0.0), "reverb": mix.get("reverb", 0.0), "comp": mix.get("comp", 0.0)}
+    if any(v > 1e-3 for v in mfx.values()):
+        full = default_fx(); full.update(mfx)
+        x = apply_fx(x, full)
+    vol = float(mix.get("volume", 1.0))
+    if abs(vol - 1.0) > 1e-3:
+        x = x * vol
+    return x.astype(np.float32)
+
+
 def fx_tail(fx) -> float:
     """Extra seconds a chain needs so delay/reverb tails aren't cut off."""
     if not fx:

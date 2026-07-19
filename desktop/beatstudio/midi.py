@@ -31,6 +31,7 @@ BTN_NOTE = {v: k for k, v in BUTTONS.items()}
 # LED behaviour = MIDI channel; colour = velocity (see the palette in the protocol PDF)
 LED_SOLID = 6                        # channel 6 = solid, 100% brightness
 LED_PULSE = 9                        # channel 9 = pulse 1/4
+LED_BLINK = 13                       # channel 13 = blink 1/8 (a pad that's actively playing)
 COLORS = {"off": 0, "white": 3, "red": 5, "orange": 9, "yellow": 13, "green": 21,
           "cyan": 37, "blue": 45, "purple": 49, "magenta": 53}
 

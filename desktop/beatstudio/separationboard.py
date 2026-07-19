@@ -27,7 +27,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
 from . import theme, groove
 from .synth import (SR, WAVES, SYNTH_KNOBS, default_params, FX_KNOBS, default_fx,
                     HUM_SPECS, HUMS, HUM_KNOBS, default_hum_params,
-                    INST_CATEGORIES, INST_SPECS, DRUMS)
+                    INST_CATEGORIES, INST_SPECS, DRUMS, MIX_KNOBS, default_mix)
 from .model import Lane, Event, uid
 from .analysis import onset_start
 from .settings import ITEMS as INSTRUMENT_ITEMS
@@ -230,16 +230,13 @@ class CurveCanvas(QWidget):
         track, which used to fall back to take 0 whenever no track was picked)."""
         return max(0, min(self.sel_take, len(self.takes) - 1))
 
-    def _band(self, i):
-        """Vertical layout for take-row i → (top, height, baseline-y, usable-height). The baseline
-        (v=0) sits near the BOTTOM of the row and v=1 is the top, so the waveform is a HALF-wave
-        going up. Each soundwave row is capped near a track CARD's height (1 track = 1 soundwave, so
-        a wave lines up with its card) — rows only shrink below that when there are too many to fit."""
+    def _band(self, i=0):
+        """Vertical layout → (top, height, baseline-y, usable-height). ONLY the SELECTED soundwave is
+        shown now (the others were confusing stacked together), so every band is the full plot area —
+        the selected wave fills the canvas. The baseline (v=0) is near the bottom, v=1 the top."""
         y0 = 6.0; y1 = self.height() - MM_H - 18
-        n = max(1, len(self.takes)); avail = y1 - y0
-        bh = avail / n if n * TAKE_ROW_H > avail else TAKE_ROW_H
-        top = y0 + i * bh
-        return top, bh, top + bh - 8, bh - 26
+        bh = y1 - y0
+        return y0, bh, y0 + bh - 8, bh - 26
 
     def _take_del_rect(self, i):
         """The ✕ (delete-soundwave) button rect at the top-right of take-row i (volume mode)."""
@@ -257,12 +254,12 @@ class CurveCanvas(QWidget):
         """(take index, 'solo'|'mute') if a Solo/Mute button was clicked, else None. Volume mode."""
         if self.mode == "notes":
             return None
-        for i in range(len(self.takes)):
-            s, m = self._take_sm_rects(i)
-            if s.contains(pos):
-                return (i, "solo")
-            if m.contains(pos):
-                return (i, "mute")
+        i = self._active_band()                          # only the selected wave is shown/hittable
+        s, m = self._take_sm_rects(i)
+        if s.contains(pos):
+            return (i, "solo")
+        if m.contains(pos):
+            return (i, "mute")
         return None
 
     def _take_name_rect(self, i):
@@ -300,12 +297,9 @@ class CurveCanvas(QWidget):
         return QRectF(x0 + 6 + i * (w + 6), 5, w, TAKE_BAR - 8)
 
     def _band_at(self, y):
-        """Which take row the cursor is over (volume mode), or None."""
-        for i in range(len(self.takes)):
-            top, bh, _, _ = self._band(i)
-            if top <= y <= top + bh:
-                return i
-        return None
+        """Which take row the cursor is over — only the SELECTED wave is shown, so it's that one."""
+        top, bh, _, _ = self._band()
+        return self._active_band() if top <= y <= top + bh else None
 
     def _first_track_on(self, band):
         """The first track bound to take-row `band`, or None — so we never draw on another wave."""
@@ -322,11 +316,10 @@ class CurveCanvas(QWidget):
                     if self._take_chip_rect(i).contains(pos):
                         return i
             return None
-        for i in range(len(self.takes)):
-            # the whole name strip is clickable, not just the 13px box (easier to hit)
-            if self._take_chk_rect(i).united(QRectF(self._take_chk_rect(i).right(),
-                                                    self._take_chk_rect(i).top(), 130, 13)).contains(pos):
-                return i
+        i = self._active_band()                          # only the selected wave is shown/hittable
+        if self._take_chk_rect(i).united(QRectF(self._take_chk_rect(i).right(),
+                                                self._take_chk_rect(i).top(), 130, 13)).contains(pos):
+            return i
         return None
 
     def _notes_del_rect(self):
@@ -338,10 +331,8 @@ class CurveCanvas(QWidget):
         """Which take's ✕ was clicked (index), or None."""
         if self.mode == "notes":
             return self._active_band() if self._notes_del_rect().contains(pos) else None
-        for i in range(len(self.takes)):
-            if self._take_del_rect(i).contains(pos):
-                return i
-        return None
+        i = self._active_band()                          # only the selected wave is shown/hittable
+        return i if self._take_del_rect(i).contains(pos) else None
 
     def _draw_del_x(self, p, r):
         p.setBrush(QBrush(QColor(28, 20, 24, 205))); p.setPen(QPen(QColor(255, 90, 90, 130), 1))
@@ -545,8 +536,10 @@ class CurveCanvas(QWidget):
         y_top = self._band(0)[0]; y_bot = self._band(len(self.takes) - 1)[0] + self._band(len(self.takes) - 1)[1]
         active_band = self._active_band()
 
-        # each take draws in its own stacked row (waveform + name); the ACTIVE row gets the 0–10 scale
+        # ONLY the selected soundwave is shown (fills the canvas) — the others were confusing.
         for i, tk in enumerate(self.takes):
+            if i != active_band:
+                continue
             top, bh, cy, half = self._band(i)
             base = tk["color"]
             if i == active_band:      # the soundwave you're editing: tinted in its own colour + a side bar
@@ -619,7 +612,7 @@ class CurveCanvas(QWidget):
             p.drawText(self.rect().adjusted(0, 8, -14, 0), Qt.AlignHCenter | Qt.AlignTop, "●  RECORDING…")
 
         for ti, tr in enumerate(self.tracks):
-            if not tr["visible"]:
+            if not tr["visible"] or self._track_band(tr) != active_band:   # only the selected wave's tracks
                 continue
             bi = self._track_band(tr)
             col = tr["color"]; active = (ti == self.active); pts = tr["points"]
@@ -1398,6 +1391,19 @@ class TrackRow(QFrame):
         lay.addWidget(self.humpanel)
         self.humpanel.setVisible(track["kind"] == "hum")
 
+        # MIX — 8 universal knobs (Volume/High/Mid/Low/Bal/Reverb/Gain/Comp) mapped 1:1 to the APC
+        # knobs. Shown only when the track is SELECTED, so the card stays compact otherwise.
+        track.setdefault("mix", default_mix())
+        self.mixpanel = QWidget(); mxl = QVBoxLayout(self.mixpanel)
+        mxl.setContentsMargins(0, 2, 0, 0); mxl.setSpacing(3)
+        mhead = QLabel("MIX — knobs 1–8 on your keyboard"); mhead.setStyleSheet("color:#6ecbff;font-size:10px;font-weight:700;")
+        mxl.addWidget(mhead)
+        self._mix_sliders = {}
+        for key, label, mn, mx, dflt, scale in MIX_KNOBS:
+            mxl.addLayout(self._knob_row(track["mix"], key, label, mn, mx, dflt, scale, store=self._mix_sliders))
+        lay.addWidget(self.mixpanel)
+        self.mixpanel.setVisible(False)                  # revealed by set_active
+
         self._group = _group_of(track)
         self._refresh_group_ui()
 
@@ -1425,12 +1431,14 @@ class TrackRow(QFrame):
             parent_lay.addLayout(self._knob_row(params, key, label, mn, mx, dflt, scale))
         return combo
 
-    def _knob_row(self, params, key, label, mn, mx, dflt, scale):
+    def _knob_row(self, params, key, label, mn, mx, dflt, scale, store=None):
         row = QHBoxLayout(); row.setSpacing(6)
         lab = QLabel(label); lab.setFixedWidth(50); lab.setStyleSheet("color:#8a8a99;font-size:10px;")
         sld = QSlider(Qt.Horizontal); sld.setRange(mn, mx); sld.setFixedHeight(16)
         cur = params.get(key, dflt / scale)
         sld.setValue(int(round(cur if key == "octave" else cur * scale)))
+        if store is not None:
+            store[key] = sld                             # so a MIDI knob can move the slider
         sld.setStyleSheet("QSlider::groove:horizontal{height:4px;background:#26262f;border-radius:2px;}"
                           "QSlider::handle:horizontal{width:12px;margin:-5px 0;border-radius:6px;"
                           "background:#7c5cff;}")
@@ -1475,6 +1483,14 @@ class TrackRow(QFrame):
 
     def set_active(self, on):
         self._refresh_style(on)
+        if hasattr(self, "mixpanel"):
+            self.mixpanel.setVisible(bool(on))           # the 8 MIX knobs show on the SELECTED card
+
+    def set_mix_display(self, key, disp):
+        """A keyboard knob moved this MIX control → move the on-screen slider to match (no re-emit)."""
+        sld = getattr(self, "_mix_sliders", {}).get(key)
+        if sld is not None:
+            sld.blockSignals(True); sld.setValue(int(disp)); sld.blockSignals(False)
 
     def set_on_take(self, on):
         """Is this track on the soundwave currently selected? Tracks of another wave fade back, so
@@ -1976,9 +1992,10 @@ class SeparationBoard(QWidget):
         tr = {"lane_id": uid("R"), "name": name or f"Track {self._n}", "color": color, "take": take_id,
               "kind": "drum", "sound": DRUMS[0], "sound_b": "", "points": [], "visible": True,
               "params": default_params(), "params_b": default_params(),
-              "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72, "fx": default_fx()}
+              "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72,
+              "fx": default_fx(), "mix": default_mix()}
         if base is not None:                             # duplicate the instrument (not the beats)
-            for k in ("kind", "sound", "sound_b", "params", "params_b", "hum_params", "lo_note", "hi_note", "fx"):
+            for k in ("kind", "sound", "sound_b", "params", "params_b", "hum_params", "lo_note", "hi_note", "fx", "mix"):
                 if k in base:
                     tr[k] = copy.deepcopy(base[k])
         return tr
@@ -2030,6 +2047,19 @@ class SeparationBoard(QWidget):
         """● on a track row → record a guide into THIS track's soundwave (handled by the Studio)."""
         self._activate_track(tr)          # so the live waveform draws on this track's row
         self.record_track.emit(tr.get("take", ""))
+
+    def midi_mix(self, knob_idx, value):
+        """A keyboard knob (0..7, value 0..127) → the SELECTED track's MIX knob (volume/EQ/fx). Updates
+        the on-screen slider AND re-renders so you hear it."""
+        if not (0 <= self.canvas.active < len(self.tracks)) or knob_idx >= len(MIX_KNOBS):
+            return
+        tr = self.tracks[self.canvas.active]
+        key, _, mn, mx, _, scale = MIX_KNOBS[knob_idx]
+        sv = mn + (mx - mn) * max(0, min(127, value)) / 127.0
+        tr.setdefault("mix", default_mix())[key] = sv / scale
+        row = self._rows[self.canvas.active]
+        row.set_mix_display(key, int(round(sv)))
+        self._on_row_changed(tr)
 
     def set_take_buf(self, take_id, buf):
         """Replace a soundwave's audio (a per-track recording landed). Keeps all takes the same length."""
@@ -2495,7 +2525,8 @@ class SeparationBoard(QWidget):
                     sound_params=sparams,
                     sound_b_params=dict(tr.get("params_b") or {}) if synth else {},
                     lo_note=int(tr.get("lo_note", 48)), hi_note=int(tr.get("hi_note", 72)),
-                    fx=dict(tr.get("fx") or {}) if is_orig else {})
+                    fx=dict(tr.get("fx") or {}) if is_orig else {},
+                    mix=dict(tr.get("mix") or {}))       # per-track 8-knob MIX (applied at render)
         pts = sorted(tr["points"], key=lambda p: p["t"])
         events = []
         if is_orig:

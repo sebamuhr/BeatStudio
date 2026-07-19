@@ -307,6 +307,7 @@ bd.add_track(); wa = bd.tracks[-1]; kwa = next(i for i, t in enumerate(bd.takes)
 bd.add_track(); wb = bd.tracks[-1]; kwb = next(i for i, t in enumerate(bd.takes) if t["id"] == wb["take"])
 wa["points"] = [{"id": "wc1", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
 wb["points"] = [{"id": "wc2", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
+bd.canvas.set_sel_take(kwa)                            # only the SELECTED wave is shown/hittable now
 s_r, m_r = cvw._take_sm_rects(kwa)
 assert cvw._hit_take_sm(s_r.center()) == (kwa, "solo") and cvw._hit_take_sm(m_r.center()) == (kwa, "mute"), \
     "Solo/Mute buttons not hittable"
@@ -371,10 +372,15 @@ _mc = MidiController(); _mc.light_pad(0, "red"); _mc.light_button("play", True);
 bd.add_track(); _mt = bd.tracks[-1]; _mt["kind"] = "hum"; _mt["sound"] = "aah"
 bd.canvas.set_active(bd.tracks.index(_mt))
 w._midi_note_on(60, 100)                                # keybed → audition the selected instrument
-_p0 = dict(_mt["hum_params"]); w._midi_knob(0, 20)     # knobs drive the instrument's knob stack (NOT tempo)
-assert _mt["hum_params"] != _p0, "knob did not drive the selected instrument's knob stack"
-_bpm0 = w.toolbar.bpm.value(); w._midi_knob(3, 100)
+_v0 = (_mt.get("mix") or {}).get("volume"); w._midi_knob(0, 20)   # knob 1 = MIX Volume
+assert _mt["mix"]["volume"] != _v0, "knob did not drive the track MIX (volume)"
+_bpm0 = w.toolbar.bpm.value(); w._midi_knob(5, 100)     # knob 6 = MIX Reverb
 assert w.toolbar.bpm.value() == _bpm0, "knob must NOT change tempo any more (that broke the grid)"
+assert _mt["mix"]["reverb"] > 0, "knob 6 did not set MIX reverb"
+# the MIX is carried onto the lane for render
+_mt["points"] = [{"id": "mx", "t": 0.3, "v": 0.8, "midi": 60, "hx": 0, "hy": 0}]
+_ml, _me = bd._lane_events(_mt)
+assert _ml.mix and _ml.mix.get("reverb", 0) > 0, "mix not carried onto the lane for render"
 w._midi_pad(0, True); w._midi_pad(0, False)            # pad col 0 = tracks[0]: play + light (no crash)
 w._midi_button("track1", True)                          # a Track button selects that column's track
 bd._delete_track(_mt)
