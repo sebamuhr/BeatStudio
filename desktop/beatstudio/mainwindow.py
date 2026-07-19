@@ -251,11 +251,15 @@ class MainWindow(QMainWindow):
             col = idx % 8; row = idx // 8
             if col >= ntr:
                 self._midi.light_pad(idx, "off"); continue
+            tr = b.tracks[col]
+            nvar = len(tr.get("variations") or [tr.get("points", [])])
+            if row >= nvar:                                           # no variation on this row → dark
+                self._midi.light_pad(idx, "off"); continue
             if self._looper.is_on(col) and self._loop_row.get(col) == row:
-                self._midi.light_pad(idx, "white", LED_BLINK)          # the pad that's looping
+                self._midi.light_pad(idx, "white", LED_BLINK)         # the variation that's looping
             else:
-                self._midi.light_pad(idx, self._PAD_COLS[col],
-                                     LED_PULSE if col == active else LED_SOLID)
+                sel = (col == active and row == int(tr.get("var", 0)))
+                self._midi.light_pad(idx, self._PAD_COLS[col], LED_PULSE if sel else LED_SOLID)
         for i in range(8):
             self._midi.light_button(f"track{i + 1}", i < ntr)
         self._midi.light_button("play", self._timer.isActive())
@@ -273,16 +277,24 @@ class MainWindow(QMainWindow):
                     self._looper.set_voice(col, s)
 
     def _loop_sample(self, tr):
-        """The audio a pad loops = the track's soundwave, cropped to its loop region (whole take if none)."""
+        """The audio a pad loops = the track played through its SELECTED instrument/hum/synth/original
+        (the drawn pattern), cropped to the soundwave's loop region (whole take if none). Falls back to
+        the raw guide recording when nothing is drawn yet."""
         b = self._board
         tk = next((t for t in b.takes if t["id"] == tr.get("take")), None) if b is not None else None
-        if tk is None:
+        lane, events = b._lane_events(tr) if b is not None else (None, None)
+        buf = self._render_pattern([lane], events) if (lane and events) else None
+        if buf is None or not len(buf):                  # nothing drawn → loop the guide recording
+            buf = tk["buf"] if tk is not None else None
+        if buf is None or not len(buf):
             return None
-        buf = tk["buf"]; n = len(buf)
-        a, bb = tk.get("loop_a"), tk.get("loop_b")
-        if a is not None and bb is not None and bb > a and n:
-            return buf[int(a * n):max(int(a * n) + 1, int(bb * n))]
-        return buf
+        a, bb = (tk.get("loop_a"), tk.get("loop_b")) if tk is not None else (None, None)
+        if a is not None and bb is not None and bb > a and tk is not None:
+            take_dur = len(tk["buf"]) / SR               # loop region is a fraction of the TAKE timeline
+            s = int(a * take_dur * SR); e = int(bb * take_dur * SR)
+            s = max(0, min(len(buf), s)); e = max(s + 1, min(len(buf), e))
+            buf = buf[s:e]
+        return np.ascontiguousarray(buf, np.float32)
 
     def _midi_note_on(self, midi, vel):
         """A key on the APC keybed → play the SELECTED track's instrument at that pitch."""
@@ -313,24 +325,29 @@ class MainWindow(QMainWindow):
             self._board.midi_mix(idx, value)
 
     def _midi_pad(self, index, pressed):
-        """Pad = a live LOOP. col = track (a grid column), row = which row is playing. Press to start
-        the track's sample looping; press again to stop. Only ONE row per column plays; pressing a
-        different row switches it. Many columns loop together (they mix). Row→variation lands later."""
+        """Pad = a live LOOP. col = track, row = VARIATION (main = row 0, alternates below). Press to
+        start that variation looping; press again to stop. Switching to another row swaps at the END of
+        the current loop (stays on beat). Many columns loop together (they mix)."""
         if not pressed:
             return                                        # toggle happens on press (clip-launcher style)
         b = self._board
         col = index % 8; row = index // 8
         if b is None or col >= len(b.tracks):
             return
-        b.canvas.set_active(col)                          # focus the column's track
+        tr = b.tracks[col]; b._ensure_variations(tr)
+        if row >= len(tr["variations"]):
+            return                                        # no variation on this row
+        b.canvas.set_active(col)
         # pressing the row that's already looping → stop this column
         if self._looper.is_on(col) and self._loop_row.get(col) == row:
             self._looper.stop_voice(col); self._loop_row.pop(col, None)
             self._midi_relight(); return
-        sample = self._loop_sample(b.tracks[col])
+        b.set_variation(tr, row)                          # the active variation (what plays + is shown)
+        sample = self._loop_sample(tr)
         if sample is None or not len(sample):
-            self._preview_original(); return              # nothing to loop (silent take) — audition
-        self._looper.set_voice(col, sample)               # start / switch this column's loop
+            self._preview_original(); return
+        already = self._looper.is_on(col)
+        self._looper.set_voice(col, sample, quantized=already)   # swap at loop end if already playing
         self._loop_row[col] = row
         self._midi_relight()
 

@@ -414,6 +414,32 @@ assert bd.takes[lka]["loop_a"] is None, "right-click did not clear the loop regi
 bd._set_tool("pen"); bd._delete_track(ltr)
 print("LOOP TOOL ok: per-soundwave loop region (drag/clear) + region sample + multi-voice Looper")
 
+# VARIATIONS: a track holds a LIST of patterns; add makes a copy; switching changes what plays;
+# a pad row = a variation and switches at the loop boundary (quantized).
+bd.add_track(); vtr = bd.tracks[-1]; vcol = bd.tracks.index(vtr)
+bd.canvas.set_active(vcol)
+vtr["points"].append({"id": "v0", "t": 0.2, "v": 0.8, "midi": 60, "hx": 0, "hy": 0})
+bd._ensure_variations(vtr); assert len(vtr["variations"]) == 1 and vtr["var"] == 0, "main = variation 0"
+bd.add_variation(vtr)
+assert len(vtr["variations"]) == 2 and vtr["var"] == 1, "add_variation did not append + activate"
+assert len(vtr["points"]) == 1 and vtr["points"] is vtr["variations"][1], "new variation not a linked copy"
+vtr["points"].append({"id": "v1b", "t": 0.5, "v": 0.8, "midi": 64, "hx": 0, "hy": 0})   # edit variation 2
+assert len(vtr["variations"][0]) == 1 and len(vtr["variations"][1]) == 2, "editing one variation touched another"
+bd.set_variation(vtr, 0); assert vtr["var"] == 0 and len(vtr["points"]) == 1, "switch back to variation 1 failed"
+# a pad row selects the variation (row 1 → variation index 1) and switches quantized if already looping
+if vcol < 8:
+    w._midi_pad(vcol + 8 * 1, True)     # row 1 of this column = variation 2
+    assert vtr["var"] == 1, "pad row did not switch the active variation"
+    w._looper.stop_all(); w._loop_row.clear()
+# quantized Looper swap: swapping an already-playing voice queues a 'next' buffer, applied at loop end
+from beatstudio.audio import Looper as _Lp2
+_q = _Lp2(); _q.available = False
+_q.set_voice(9, np.ones(100, "float32"))
+_q.set_voice(9, np.zeros(50, "float32"), quantized=True)
+assert _q._voices[9]["next"] is not None, "quantized swap did not queue for the loop boundary"
+bd._delete_track(vtr)
+print("VARIATIONS ok: add/switch variations (linked, independent); pad row = variation; quantized swap")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

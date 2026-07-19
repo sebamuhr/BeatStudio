@@ -146,16 +146,24 @@ class Looper:
                 take = min(frames - i, n - pos)
                 out[i:i + take] += buf[pos:pos + take]
                 pos += take; i += take
-                if pos >= n:
-                    pos = 0                       # seamless loop
+                if pos >= n:                      # loop boundary — swap to a pending variation HERE,
+                    nxt = v.get("next")           # so the switch lands on the beat, never off
+                    if nxt is not None:
+                        v["buf"] = nxt; v["next"] = None; buf = nxt; n = len(buf)
+                    pos = 0
             v["pos"] = pos
         np.tanh(out, out=out)                     # soft-clip the sum
 
-    def set_voice(self, vid, buf):
-        """Start/replace a looping voice (swap a column's sample keeps the others going)."""
+    def set_voice(self, vid, buf, quantized=False):
+        """Start/replace a looping voice. quantized=True swaps at the next loop boundary (stays on
+        beat) when the voice is already playing; otherwise it starts immediately."""
         if buf is None or not len(buf):
             self.stop_voice(vid); return
-        self._voices[vid] = {"buf": np.ascontiguousarray(buf, np.float32), "pos": 0}
+        buf = np.ascontiguousarray(buf, np.float32)
+        if quantized and vid in self._voices:
+            self._voices[vid]["next"] = buf       # swap at the end of the current loop
+        else:
+            self._voices[vid] = {"buf": buf, "pos": 0, "next": None}
         self._ensure_stream()
 
     def stop_voice(self, vid):

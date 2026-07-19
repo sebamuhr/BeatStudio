@@ -4,6 +4,23 @@
 continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
 `Beat Studio · v0.36.0`).
 
+## v0.39.0 — VARIATIONS (row = variation) · pads loop the INSTRUMENT pattern · quantized switching
+Completes the live-performance model the user described.
+- **Pads loop the INSTRUMENT pattern, not the raw recording.** `_loop_sample` now renders the track through
+  its SELECTED instrument/hum/synth/original (`_lane_events` → `_render_pattern`) and crops to the
+  soundwave's loop region (falls back to the guide recording only when nothing is drawn).
+- **Per-track VARIATIONS** — a track holds a LIST of patterns; only one plays; pads switch them. Model:
+  `track["variations"]` (list of point-lists) + `track["var"]`, with `track["points"]` kept linked to the
+  active slot (`_ensure_variations` survives reassignment/deepcopy). `add_variation` appends a COPY of the
+  current pattern and activates it; `set_variation` switches. Card UI: a **Variations 1 2 3 … ＋** strip on
+  the selected card (＋ = "the extra button"). Full-duplicate copies all variations.
+- **APC grid: row = VARIATION.** Each column = a track; the pads DOWN the column are its variations (main =
+  bottom). Pressing a row starts/switches that variation's loop; only rows that exist are lit. Switching an
+  already-playing column **swaps at the loop boundary** (`Looper` queues a `next` buffer applied at pos-wrap)
+  so changing the bassline live always lands on the beat. Verified on hardware (row0→var0 loops, row1→var1
+  queues a quantized swap).
+- board_check: **VARIATIONS** check + LOOP TOOL; 32 checks green. Screenshot `scratchpad/variations.png`.
+
 ## v0.38.0 — THE LOOP TOOL: per-soundwave loop region + live multi-loop pads (finally!)
 The tool the user asked for repeatedly. Mark a loop region on any soundwave (like the Studio ruler loop),
 and the APC pads loop those samples together — a live clip-launcher.

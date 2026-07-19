@@ -1340,6 +1340,8 @@ class TrackRow(QFrame):
     flag = Signal(object, str)               # per-track control: (track, "solo"|"mute"|"volume"|"notes")
     record = Signal(object)                  # ● record a guide into THIS track's soundwave
     duplicate = Signal(object)               # ⧉ duplicate this track (asks: soundwave only / full)
+    add_variation = Signal(object)           # ＋ add a variation (alternate pattern) to this track
+    select_variation = Signal(object, int)   # pick which variation is active (track, index)
 
     def __init__(self, track, items):
         super().__init__()
@@ -1468,6 +1470,12 @@ class TrackRow(QFrame):
         lay.addWidget(self.mixpanel)
         self.mixpanel.setVisible(False)                  # revealed by set_active
 
+        # VARIATIONS — main + alternates that play INSTEAD of it; on the APC each pad DOWN the column is
+        # a variation. Shown on the selected card: numbered buttons to switch + ＋ to add.
+        self.varbar = QWidget(); self._varlay = QHBoxLayout(self.varbar)
+        self._varlay.setContentsMargins(0, 2, 0, 0); self._varlay.setSpacing(4)
+        lay.addWidget(self.varbar); self.varbar.setVisible(False)
+
         self._group = _group_of(track)
         self._refresh_group_ui()
 
@@ -1549,6 +1557,34 @@ class TrackRow(QFrame):
         self._refresh_style(on)
         if hasattr(self, "mixpanel"):
             self.mixpanel.setVisible(bool(on))           # the 8 MIX knobs show on the SELECTED card
+        if hasattr(self, "varbar"):
+            self.varbar.setVisible(bool(on))
+
+    def refresh_variations(self):
+        """Rebuild the variation buttons (1..n + ＋) to match the track's variations + active index."""
+        if not hasattr(self, "_varlay"):
+            return
+        while self._varlay.count():
+            it = self._varlay.takeAt(0); w = it.widget()
+            if w is not None:
+                w.deleteLater()
+        lab = QLabel("Variations"); lab.setStyleSheet("color:#8a8a99;font-size:10px;")
+        self._varlay.addWidget(lab)
+        variations = self.track.get("variations") or [self.track.get("points", [])]
+        active = int(self.track.get("var", 0))
+        on = ("QPushButton{background:#7c5cff;border:1px solid #9b82ff;border-radius:6px;color:#fff;"
+              "font-size:11px;font-weight:600;}")
+        off = ("QPushButton{background:#16161e;border:1px solid #2a2a36;border-radius:6px;color:#c0c0cc;"
+               "font-size:11px;}QPushButton:hover{background:#1e1e28;}")
+        for i in range(len(variations)):
+            bb = QPushButton(str(i + 1)); bb.setFixedSize(24, 22); bb.setCursor(Qt.PointingHandCursor)
+            bb.setStyleSheet(on if i == active else off)
+            bb.clicked.connect(lambda _=False, k=i: self.select_variation.emit(self.track, k))
+            self._varlay.addWidget(bb)
+        plus = QPushButton("＋"); plus.setFixedSize(24, 22); plus.setCursor(Qt.PointingHandCursor)
+        plus.setToolTip("Add a variation (a copy of this pattern you can tweak) — plays instead of the main")
+        plus.setStyleSheet(off); plus.clicked.connect(lambda: self.add_variation.emit(self.track))
+        self._varlay.addWidget(plus); self._varlay.addStretch(1)
 
     def set_mix_display(self, key, disp):
         """A keyboard knob moved this MIX control → move the on-screen slider to match (no re-emit)."""
@@ -2011,6 +2047,9 @@ class SeparationBoard(QWidget):
         row.flag.connect(self._on_track_flag)
         row.record.connect(self._on_track_record)
         row.duplicate.connect(self._duplicate_track)
+        row.add_variation.connect(self.add_variation)
+        row.select_variation.connect(self.set_variation)
+        self._ensure_variations(tr); row.refresh_variations()
         row.refresh_flags()
         self._rows.append(row); self._list.insertWidget(self._list.count() - 1, row)
         return row
@@ -2063,6 +2102,7 @@ class SeparationBoard(QWidget):
               "params": default_params(), "params_b": default_params(),
               "hum_params": default_hum_params(), "lo_note": 48, "hi_note": 72,
               "fx": default_fx(), "mix": default_mix()}
+        tr["variations"] = [tr["points"]]; tr["var"] = 0   # main = variation 0 (pads switch variations)
         if base is not None:                             # duplicate the instrument (not the beats)
             for k in ("kind", "sound", "sound_b", "params", "params_b", "hum_params", "lo_note", "hi_note", "fx", "mix"):
                 if k in base:
@@ -2103,14 +2143,56 @@ class SeparationBoard(QWidget):
                                 name=f"{src['name']} copy")
         tr = self._make_track(tk["id"], name=f"{src['name']} copy", base=(src if full else None))
         if full:
-            self._ensure_pt_ids(src)
-            tr["points"] = copy.deepcopy(src.get("points") or [])
+            self._ensure_pt_ids(src); self._ensure_variations(src)
+            tr["variations"] = copy.deepcopy(src["variations"])   # copy ALL variations + the active one
+            tr["var"] = max(0, min(int(src.get("var", 0)), len(tr["variations"]) - 1))
+            tr["points"] = tr["variations"][tr["var"]]            # link points to the copied active var
         self.tracks.append(tr); self._active_take = tk["id"]
         self._add_row(tr)
         self.canvas.set_takes(self.takes); self._sync_sel_take()
         self._activate_track(tr); self._sel_take_rows(); self._refresh()
         self.tracks_changed.emit(tr["lane_id"])
         return tr
+
+    # ---- variations: a track holds a LIST of patterns; only one plays; pads switch them ----
+    @staticmethod
+    def _ensure_variations(tr):
+        """Guarantee tr['variations'] (list of point-lists) + tr['var']. Keep the ACTIVE slot pointing at
+        the live tr['points'] list, so reassigning points (load/undo/sync) never loses the link."""
+        if not tr.get("variations"):
+            tr["variations"] = [tr.get("points") or []]
+            tr["var"] = 0
+        tr["var"] = max(0, min(int(tr.get("var", 0)), len(tr["variations"]) - 1))
+        if tr.get("points") is None:
+            tr["points"] = tr["variations"][tr["var"]]
+        else:
+            tr["variations"][tr["var"]] = tr["points"]   # active variation == the live points list
+
+    def add_variation(self, tr):
+        """＋ Variation — append a COPY of the current pattern (tweak a duplicate); it becomes active."""
+        self._ensure_variations(tr)
+        tr["variations"].append(copy.deepcopy(tr["points"]))
+        tr["var"] = len(tr["variations"]) - 1
+        tr["points"] = tr["variations"][tr["var"]]
+        self._refresh_variations(tr); self.canvas.update()
+        self.tracks_changed.emit(tr.get("lane_id", ""))
+
+    def set_variation(self, tr, i):
+        """Switch the active variation (what's shown/edited AND what a pad plays)."""
+        self._ensure_variations(tr)
+        if not (0 <= i < len(tr["variations"])):
+            return
+        tr["var"] = i; tr["points"] = tr["variations"][i]
+        self._refresh_variations(tr); self.canvas.update()
+        self.tracks_changed.emit(tr.get("lane_id", ""))
+
+    def _refresh_variations(self, tr):
+        try:
+            idx = self.tracks.index(tr)
+        except ValueError:
+            return
+        if idx < len(self._rows):
+            self._rows[idx].refresh_variations()
 
     def _on_track_record(self, tr):
         """● on a track row → record a guide into THIS track's soundwave (handled by the Studio)."""
