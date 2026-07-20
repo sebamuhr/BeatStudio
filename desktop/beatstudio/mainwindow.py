@@ -3,13 +3,14 @@ classic DAW scroll-syncing (ruler follows horizontal scroll, headers follow vert
 import os
 import numpy as np
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
-                               QSplitter)
+                               QSplitter, QScrollArea)
 from PySide6.QtGui import QPainter, QPen, QColor, QKeySequence, QShortcut, QAction
 from PySide6.QtCore import Qt, QTimer, QElapsedTimer
 
 from . import theme
 from .model import Project, demo_project, empty_project, Lane, Event, uid
 from .timeline import TimelineView
+from .arranger import ClipArranger
 from .ruler import Ruler
 from .headers import TrackHeaders
 from .toolbar import Toolbar
@@ -111,6 +112,16 @@ class MainWindow(QMainWindow):
             "QSplitter::handle{background:#14141c;border-left:1px solid #262630;border-right:1px solid #262630;}"
             "QSplitter::handle:hover{background:#242430;}")
         g.addWidget(self._grid_split, 1)
+        # The Studio is now a CLIP ARRANGER (record your pad performance → clips). The old beat grid
+        # stays alive (board sync / minimap references it) but is HIDDEN — the arranger is what you see.
+        self._arranger = ClipArranger(beats_per_bar=lambda: (self._board.canvas.beats_per_bar
+                                                             if self._board is not None else 4))
+        self._arranger.changed.connect(self._on_arranger_changed)
+        self._arr_scroll = QScrollArea(); self._arr_scroll.setWidgetResizable(True)
+        self._arr_scroll.setFrameShape(QFrame.NoFrame); self._arr_scroll.setWidget(self._arranger)
+        self._arr_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        g.addWidget(self._arr_scroll, 1)
+        self._grid_split.hide()                        # retire the beat grid — Studio shows clips
         grid_host.setStyleSheet("")
         self._grid_host = grid_host
         # The Studio pane = its toolbar + grid kept TOGETHER, so in one-screen mode the toolbar
@@ -467,6 +478,12 @@ class MainWindow(QMainWindow):
     def _refresh_arranger(self):
         if getattr(self, "_arranger", None) is not None:
             self._arranger.set_clips(self._clips)
+
+    def _on_arranger_changed(self):
+        """A clip was moved / resized / deleted in the arranger."""
+        self._clips = list(self._arranger.clips)
+        if self.engine.playing:
+            self._play_arrangement()                     # re-bounce & keep playing the edited version
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
@@ -1459,10 +1476,62 @@ class MainWindow(QMainWindow):
         # resume from the paused spot, or from the start marker if we're fully stopped
         self._play_from(self._paused_beat if self._paused_beat is not None else self.project.start_at)
 
+    def _play_arrangement(self):
+        """(Re)bounce the clip arrangement and play it from the start."""
+        self._play_from(0.0)
+
+    def _clip_sample(self, c):
+        """Render a clip's sample = its track's chosen VARIATION through its instrument, cropped to the
+        loop region (volume/balance neutral — applied as a gain when placed)."""
+        b = self._board
+        if b is None:
+            return None
+        tr = next((t for t in b.tracks if t.get("lane_id") == c.get("lane_id")), None)
+        if tr is None and c["col"] < len(b.tracks):
+            tr = b.tracks[c["col"]]
+        if tr is None:
+            return None
+        b._ensure_variations(tr)
+        v = c.get("variation", 0); saved_pts, saved_var = tr.get("points"), tr.get("var")
+        if 0 <= v < len(tr["variations"]):
+            tr["points"] = tr["variations"][v]; tr["var"] = v
+        s = self._loop_sample(tr)
+        tr["points"], tr["var"] = saved_pts, saved_var    # restore the active variation
+        return (s, self._loop_gain(tr))
+
+    def _render_arrangement(self):
+        """Bounce all clips into one buffer: each clip's sample loops to fill its span, at its beat."""
+        if not self._clips:
+            return None
+        bpm = self._board.bpm if self._board else self.project.bpm
+        spb = 60.0 / max(1, bpm)
+        total_beats = max(c["start"] + c["length"] for c in self._clips)
+        total = int(total_beats * spb * SR) + SR // 2
+        out = np.zeros(total, np.float32)
+        for c in self._clips:
+            res = self._clip_sample(c)
+            if not res or res[0] is None or not len(res[0]):
+                continue
+            sample, gain = res; sample = sample * float(gain)
+            start = int(c["start"] * spb * SR); span = int(c["length"] * spb * SR)
+            i = 0
+            while i < span and start + i < total:
+                take = min(span - i, len(sample), total - (start + i))
+                out[start + i:start + i + take] += sample[:take]
+                i += take
+        np.tanh(out, out=out)
+        return out.astype(np.float32)
+
     def _play_from(self, start_beat: float):
         if self._board is not None:                 # starting the transport clears board ■ state
             self._board.clear_playing()
-        buf, self._spb = render_project(self.project, self._samples, orig=self._orig_rec)
+        if self._clips:                             # Studio = clip arranger → play the arrangement
+            buf = self._render_arrangement()
+            self._spb = 60.0 / max(1, self._board.bpm if self._board else self.project.bpm)
+            if buf is None or not len(buf):
+                return
+        else:
+            buf, self._spb = render_project(self.project, self._samples, orig=self._orig_rec)
         self.engine.set_buffer(buf)
         start_frame = int(start_beat * self._spb * SR)
         loop = self.project.loop_on and self.project.loop_end and self.project.loop_start is not None
@@ -1477,6 +1546,8 @@ class MainWindow(QMainWindow):
         self.engine.stop(); self.engine.stop_one_shot(); self._timer.stop()
         self._paused_beat = None                    # STOP rewinds to the start
         self.timeline.set_playhead(None)
+        if getattr(self, "_arranger", None) is not None:
+            self._arranger.set_playhead(None)
         self.toolbar.set_playing(False)
         if self._board is not None:
             self._board.clear_playing()
@@ -1506,6 +1577,12 @@ class MainWindow(QMainWindow):
         pos = self.engine.position_frames()
         beat = pos / SR / self._spb
         self.timeline.set_playhead(beat)
+        if self._clips:                                   # drive the arranger playhead + auto-scroll
+            self._arranger.set_playhead(beat)
+            px = self._arranger._x_of(beat); sb = self._arr_scroll.horizontalScrollBar()
+            vw = self._arr_scroll.viewport().width()
+            if px - sb.value() > vw * 0.8 or px - sb.value() < 0:
+                sb.setValue(int(px - vw * 0.4))
         if self._board is not None:                       # mirror the red line onto the board too
             take = max(1e-6, len(self._board.buf) / SR)
             self._board.canvas.set_playhead(min(1.0, (pos / SR) / take) if self.engine.playing else None)

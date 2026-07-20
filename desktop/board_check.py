@@ -463,6 +463,34 @@ bd.sig_box.setCurrentIndex(2)  # back to 4/4
 bd._delete_track(str_)
 print("SNAP/TIMESIG ok: volume beats snap to the grid (toggleable); time-sig sets the bar")
 
+# PAD GRID + PERFORMANCE RECORD + ARRANGER: on-screen pads trigger loops; recording lays down clips
+# (snapped to the bar); the Studio shows clips (beat grid retired); the arrangement bounces to audio.
+assert w._grid_split.isHidden() and not w._arranger.isHidden(), "Studio should show the clip arranger"
+bd.canvas.set_sel_take(0)
+for _i in range(2):
+    bd.add_track(); _pt = bd.tracks[-1]; _pt["kind"] = "drum"; _pt["sound"] = ["kick", "snare"][_i]
+    _pt["points"][:] = [{"id": f"a{_i}", "t": 0.2, "v": 0.9, "midi": 60, "hx": 0, "hy": 0}]
+    bd._ensure_variations(_pt)
+_c0 = bd.tracks.index([t for t in bd.tracks if t["sound"] == "kick"][0])
+_c1 = bd.tracks.index([t for t in bd.tracks if t["sound"] == "snare"][0])
+w._toggle_padgrid(); assert w._padgrid is not None, "pad grid did not create"
+_ps = w._pad_state(); assert _ps["ntracks"] == len(bd.tracks), "pad state track count wrong"
+w._pad_hit(_c0)                                        # on-screen pad → column c0 loops
+assert w._looper.is_on(_c0), "on-screen pad did not start a loop"
+# record a performance: arm, a pad opens a clip, disarm closes it (snapped to a whole bar)
+w._toggle_perf_record(); assert w._perf_recording, "perf record did not arm"
+w._pad_hit(_c1)                                        # opens a clip on lane c1
+assert any(cl["col"] == _c1 for cl in w._clips), "pad did not open a clip while recording"
+w._toggle_perf_record(); assert not w._perf_recording, "perf record did not disarm"
+_clip = w._clips[-1]
+assert _clip["start"] % w._board.canvas.beats_per_bar == 0, "clip start not snapped to the bar"
+assert _clip["length"] >= w._board.canvas.beats_per_bar, "clip length not >= 1 bar"
+# the arrangement bounces to a buffer with audio
+_ab = w._render_arrangement()
+assert _ab is not None and float(np.abs(_ab).sum()) > 0, "arrangement rendered silent"
+w._looper.stop_all(); w._clips = []; w._refresh_arranger()
+print("ARRANGER ok: on-screen pads trigger loops; record lays down bar-snapped clips; arrangement bounces")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

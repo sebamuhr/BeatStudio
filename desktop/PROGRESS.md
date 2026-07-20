@@ -1,8 +1,34 @@
 # Beat Studio (native desktop) — PROGRESS
 
 **This is the living status doc for the NATIVE desktop app. Read this first when
-continuing in a new chat.** Current version: **v0.36.0** (shown in the window title bar as
-`Beat Studio · v0.36.0`).
+continuing in a new chat.** Current version: **v0.41.0** (shown in the window title bar as
+`Beat Studio · v0.41.0`).
+
+## v0.41.0 — STUDIO = CLIP ARRANGER (record your pad performance) + on-screen pad grid
+The Studio is re-architected (plan: `PLAN-v0.41-studio-performance-arranger.md`, decisions locked with the
+user: snap-to-bar, retire the beat grid). Workflow: make samples on the separator → assign to pad columns →
+**record your live pad performance → the loops land on the Studio timeline as CLIPS** → arrange them.
+- **On-screen 8×5 pad grid** (`padgrid.py`, toolbar **▦ Pads** to show/hide). Mirrors the APC: column =
+  track, rows up = variations, active/playing lit + blink. Click to trigger loops without the keyboard
+  (also great for debugging). Shares `_pad_hit` with the APC; `_relight_pads` repaints both.
+- **Record performance** (toolbar **● Record perf.**). Arms `_perf_recording` with a beat clock; a pad
+  START opens a clip on that column's lane **snapped to the bar**, STOP/switch closes it (length snapped to
+  whole bars). Clips in `self._clips`.
+- **The Studio shows CLIPS, not beats.** New `arranger.py` `ClipArranger`: lanes (one per column) + a
+  bar ruler + clips as coloured bars with loop-seam lines. The old beat grid (`_grid_split`) is HIDDEN
+  (kept alive so board-sync/minimap refs don't break). Clip editing: click-select, **drag to move**, drag
+  the **right edge to extend** (loop longer), right-click / Del to delete — all snapped to the bar.
+- **Arrangement playback:** Play bounces all clips into one buffer (`_render_arrangement` → each clip's
+  chosen variation, looped to fill its span, at its beat; `_clip_sample` renders the variation) and plays
+  it with a playhead + auto-scroll. `_play_from` routes to the arrangement when clips exist.
+- Verified headless (`board_check` ARRANGER check — pad→loop, record→bar-snapped clips, bounce has audio;
+  34 checks green) + screenshots `scratchpad/padgrid.png`, `arranger.png`, `studio_full.png`.
+- **STILL TODO (Phase 2/3):** per-clip mix/EQ overrides; live scheduling instead of bounce (so edits during
+  playback are seamless); linked-content propagation (editing a sample updates its clips is partial — the
+  bounce re-renders, but not live); crop from the LEFT edge; copy/paste clips; save/load the arrangement
+  (clips aren't persisted yet). The old beat-grid machinery is dormant, not deleted — clean up later.
+
+## v0.40.0 — time signature + beat snap (so you can size samples to the bar)
 
 ## v0.40.0 — time signature + beat snap (so you can size samples to the bar)
 User: can't see the meter, so can't tell how long a sample should be; and volume beats didn't snap.
