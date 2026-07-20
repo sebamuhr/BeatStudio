@@ -66,6 +66,8 @@ class Toolbar(QWidget):
     open_separator = Signal()
     layout_toggled = Signal()                 # ⊟/⊞ — one-screen (docked) vs two-screen (separate windows)
     fullscreen_toggled = Signal()             # ⛶ — global full screen (both windows), lives here now
+    pads_toggled = Signal()                   # ▦ — show/hide the on-screen pad grid
+    perf_record = Signal()                    # ● — record the pad performance into clips
     metronome = Signal(); bpm_changed = Signal(int)
     undo = Signal(); redo = Signal(); clear_all = Signal()
 
@@ -149,7 +151,34 @@ class Toolbar(QWidget):
         self.full_btn.clicked.connect(self.fullscreen_toggled.emit)
         lay.addWidget(self.full_btn)
 
+        # ● Record performance — capture the pad performance into clips on the timeline
+        self.perf_btn = QPushButton("●  Record perf."); self.perf_btn.setFixedHeight(54)
+        self.perf_btn.setCursor(Qt.PointingHandCursor); self.perf_btn.setFont(theme.sans(12, 600))
+        self.perf_btn.setToolTip("Record your pad performance → clips on the timeline")
+        self._perf_off = ("QPushButton{background:rgba(255,93,93,0.14);border:1px solid #5a2a2a;"
+                          "border-radius:12px;color:#ffb4b4;padding:0 16px;}"
+                          "QPushButton:hover{background:rgba(255,93,93,0.22);}")
+        self._perf_on = ("QPushButton{background:#8a2a2a;border:1px solid #ff5d5d;border-radius:12px;"
+                         "color:#fff;padding:0 16px;font-weight:700;}")
+        self.perf_btn.setStyleSheet(self._perf_off)
+        self.perf_btn.clicked.connect(self.perf_record.emit)
+        lay.addWidget(self.perf_btn)
+
+        # ▦ Pads — the on-screen pad grid (play/debug without the keyboard)
+        self.pads_btn = QPushButton("▦ Pads"); self.pads_btn.setFixedHeight(54)
+        self.pads_btn.setCursor(Qt.PointingHandCursor); self.pads_btn.setFont(theme.sans(12, 600))
+        self.pads_btn.setToolTip("Show/hide the on-screen 8×5 pad grid")
+        self.pads_btn.setStyleSheet(
+            "QPushButton{background:#101016;border:1px solid #2a2a36;border-radius:12px;"
+            "color:#d8d8e0;padding:0 16px;}QPushButton:hover{background:#16161e;}")
+        self.pads_btn.clicked.connect(self.pads_toggled.emit)
+        lay.addWidget(self.pads_btn)
+
         self.refresh_info()
+
+    def set_perf_recording(self, on: bool):
+        self.perf_btn.setText("■  Stop rec" if on else "●  Record perf.")
+        self.perf_btn.setStyleSheet(self._perf_on if on else self._perf_off)
 
     def set_layout_mode(self, one_screen: bool):
         self.layout_btn.setText("1 screen" if one_screen else "2 screens")

@@ -5,7 +5,7 @@ import numpy as np
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
                                QSplitter)
 from PySide6.QtGui import QPainter, QPen, QColor, QKeySequence, QShortcut, QAction
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QElapsedTimer
 
 from . import theme
 from .model import Project, demo_project, empty_project, Lane, Event, uid
@@ -20,6 +20,7 @@ from .synth import SR, click as synth_click
 from .settings import SettingsPanel
 from .recorder import Recorder
 from .midi import MidiController
+from .padgrid import PadGrid
 from .analysis import onsets_from, gate_lin
 from .extract import multi_extract, smart_extract, analyze_clusters, build_from_review
 from . import groove
@@ -172,6 +173,8 @@ class MainWindow(QMainWindow):
         self.toolbar.open_separator.connect(self._open_separator)
         self.toolbar.layout_toggled.connect(self._toggle_layout)
         self.toolbar.fullscreen_toggled.connect(self._toggle_fullscreen)
+        self.toolbar.pads_toggled.connect(self._toggle_padgrid)
+        self.toolbar.perf_record.connect(self._toggle_perf_record)
         self.toolbar.undo.connect(self._undo)
         self.toolbar.redo.connect(self._redo)
         self.toolbar.clear_all.connect(self._clear_beats_confirm)
@@ -194,6 +197,11 @@ class MainWindow(QMainWindow):
         self.engine = AudioEngine()
         self._looper = Looper()       # live multi-loop pad performance (columns loop together)
         self._loop_row = {}           # column -> the row (variation) currently looping, for LED blink
+        self._padgrid = None          # on-screen 8x5 pad grid (show/hide)
+        self._clips = []              # recorded arrangement: list of clip dicts (the Studio timeline)
+        self._perf_recording = False  # capturing a pad performance into clips
+        self._perf_openclips = {}     # column -> clip currently being recorded (open until pad stops)
+        self._perf_clock = QElapsedTimer()
         self.recorder = Recorder()
         self._rec_lane = None
         self._orig_rec = None       # whole-groove master take
@@ -337,11 +345,14 @@ class MainWindow(QMainWindow):
             self._board.midi_mix(idx, value)
 
     def _midi_pad(self, index, pressed):
-        """Pad = a live LOOP. col = track, row = VARIATION (main = row 0, alternates below). Press to
-        start that variation looping; press again to stop. Switching to another row swaps at the END of
-        the current loop (stays on beat). Many columns loop together (they mix)."""
-        if not pressed:
-            return                                        # toggle happens on press (clip-launcher style)
+        """APC pad → shared pad handler (toggle happens on press, clip-launcher style)."""
+        if pressed:
+            self._pad_hit(index)
+
+    def _pad_hit(self, index):
+        """A pad (APC or on-screen) — a live LOOP. col = track, row = VARIATION (main = row 0). Press
+        to start that variation looping; press again to stop; another row switches (swaps at the loop
+        end, on beat). Many columns loop together. If recording, it logs a clip on the Studio."""
         b = self._board
         col = index % 8; row = index // 8
         if b is None or col >= len(b.tracks):
@@ -350,19 +361,112 @@ class MainWindow(QMainWindow):
         if row >= len(tr["variations"]):
             return                                        # no variation on this row
         b.canvas.set_active(col)
-        # pressing the row that's already looping → stop this column
-        if self._looper.is_on(col) and self._loop_row.get(col) == row:
+        if self._looper.is_on(col) and self._loop_row.get(col) == row:   # re-press → stop this column
             self._looper.stop_voice(col); self._loop_row.pop(col, None)
-            self._midi_relight(); return
+            self._perf_close(col)                         # close its recorded clip
+            self._relight_pads(); return
         b.set_variation(tr, row)                          # the active variation (what plays + is shown)
         sample = self._loop_sample(tr)
         if sample is None or not len(sample):
             self._preview_original(); return
         already = self._looper.is_on(col)
+        if already:
+            self._perf_close(col)                         # switching variation closes the old clip
         self._looper.set_voice(col, sample, quantized=already,
                                gain=self._loop_gain(tr), pan=self._loop_pan(tr))
         self._loop_row[col] = row
+        self._perf_open(col, row)                         # open a new clip (if recording)
+        self._relight_pads()
+
+    def _relight_pads(self):
+        """Repaint both pad surfaces (APC LEDs + the on-screen grid)."""
         self._midi_relight()
+        if getattr(self, "_padgrid", None) is not None:
+            self._padgrid.update()
+
+    def _pad_state(self):
+        """State the on-screen grid draws: per-column colour/variations/active/looping."""
+        b = self._board
+        ntr = len(b.tracks) if b is not None else 0
+        active = b.canvas.active if b is not None else -1
+        nvar, var = {}, {}
+        for c in range(ntr):
+            tr = b.tracks[c]; b._ensure_variations(tr)
+            nvar[c] = len(tr["variations"]); var[c] = int(tr.get("var", 0))
+        return {"ntracks": ntr, "active": active, "nvar": nvar, "var": var,
+                "looping": {c: self._looper.is_on(c) for c in range(ntr)},
+                "loop_row": dict(self._loop_row)}
+
+    def _toggle_padgrid(self):
+        """Show/hide the on-screen 8x5 pad grid (a separate window)."""
+        if self._padgrid is None:
+            self._padgrid = PadGrid(self._pad_state)
+            self._padgrid.setWindowTitle("Pads — click to launch loops")
+            self._padgrid.setWindowFlag(Qt.Window, True)
+            self._padgrid.resize(560, 320)
+            self._padgrid.pad_hit.connect(self._pad_hit)
+        if self._padgrid.isVisible():
+            self._padgrid.hide()
+        else:
+            self._padgrid.show(); self._padgrid.raise_(); self._padgrid.update()
+
+    def _toggle_perf_record(self):
+        """Arm/disarm recording the pad performance into clips on the Studio timeline."""
+        if self._perf_recording:
+            for col in list(self._perf_openclips):        # close any loops still held
+                self._perf_close(col)
+            self._perf_recording = False
+            self.toolbar.set_perf_recording(False)
+            self._set_title(f"performance recorded — {len(self._clips)} clip(s) on the timeline")
+        else:
+            self._clips = []; self._perf_openclips = {}
+            self._refresh_arranger()
+            self._perf_recording = True
+            self._perf_clock.restart()
+            self.toolbar.set_perf_recording(True)
+            # any loops already playing when you hit record start a clip at bar 0
+            for col, row in list(self._loop_row.items()):
+                self._perf_open(col, row)
+            self._set_title("recording performance — hit pads to lay down clips")
+
+    # ---- performance recording → clips on the Studio timeline ----
+    def _perf_beat(self):
+        """Current beat since record armed (bpm from the board)."""
+        bpm = self._board.bpm if self._board else self.project.bpm
+        return self._perf_clock.elapsed() / 1000.0 / (60.0 / max(1, bpm))
+
+    def _perf_bars(self):
+        return self._board.canvas.beats_per_bar if self._board else 4
+
+    def _perf_open(self, col, row):
+        """A pad started → open a clip on this column's lane, snapped to the bar."""
+        if not self._perf_recording or self._board is None or col >= len(self._board.tracks):
+            return
+        self._perf_close(col)                             # never overlap on one lane
+        tr = self._board.tracks[col]
+        bar = self._perf_bars()
+        start = round(self._perf_beat() / bar) * bar      # snap the start to the nearest bar
+        clip = {"col": col, "lane_id": tr.get("lane_id"), "variation": row,
+                "start": float(start), "length": float(bar),   # provisional 1 bar until it closes
+                "color": tr["color"].name() if hasattr(tr["color"], "name") else "#7c5cff",
+                "name": tr.get("name", f"Track {col+1}")}
+        self._perf_openclips[col] = clip
+        self._clips.append(clip)
+        self._refresh_arranger()
+
+    def _perf_close(self, col):
+        """A pad stopped/switched → close its open clip, snapping the length to a whole bar (≥1)."""
+        clip = self._perf_openclips.pop(col, None)
+        if clip is None:
+            return
+        bar = self._perf_bars()
+        end = round(self._perf_beat() / bar) * bar
+        clip["length"] = max(bar, end - clip["start"])
+        self._refresh_arranger()
+
+    def _refresh_arranger(self):
+        if getattr(self, "_arranger", None) is not None:
+            self._arranger.set_clips(self._clips)
 
     def _set_title(self, note: str = ""):
         """Show the version so you know which build is live."""
