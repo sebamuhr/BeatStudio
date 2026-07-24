@@ -440,14 +440,30 @@ class CurveCanvas(QWidget):
         self.update()
 
     def _fit_note_range(self):
-        """Centre the (scrollable) NOTE_SPAN-semitone window on the active take's detected notes, so
-        the singing lands in the middle of the grid. Falls back to C3..-ish when there's no pitch."""
-        centre = 63                                       # ~D#4 default centre
-        pr = self.takes[self._active_band()].get("pitch") if self.takes else None
+        """Centre the (scrollable) NOTE_SPAN window so BOTH the detected pitch AND the PLACED beats are
+        visible — every beat is a note, so a beat must never be scrolled off-screen (that was the bug:
+        a high-pitched take pushed the window up and hid the default-C4 beats). Beats take priority."""
+        ab = self._active_band()
+        pitch_vals, beat_vals = [], []
+        pr = self.takes[ab].get("pitch") if self.takes else None
         if pr and len(pr[0]) > 1:
             good = pr[1][pr[2] & np.isfinite(pr[1])]
             if len(good):
-                centre = int(round((float(good.min()) + float(good.max())) / 2))
+                pitch_vals = [float(good.min()), float(good.max())]
+        for tr in self.tracks:                            # the placed beats on THIS soundwave's tracks
+            if self._track_band(tr) == ab:
+                beat_vals += [float(pt.get("midi", DEF_MIDI)) for pt in (tr.get("points") or [])]
+        vals = beat_vals + pitch_vals
+        if beat_vals:                                     # keep EVERY beat in view; fold in pitch if it fits
+            lo_v, hi_v = min(beat_vals), max(beat_vals)
+            for v in pitch_vals:
+                if hi_v - min(lo_v, v) <= NOTE_SPAN and max(hi_v, v) - lo_v <= NOTE_SPAN:
+                    lo_v, hi_v = min(lo_v, v), max(hi_v, v)
+            centre = int(round((lo_v + hi_v) / 2))
+        elif vals:
+            centre = int(round((min(vals) + max(vals)) / 2))
+        else:
+            centre = 63
         lo = max(PIANO_MIN, min(PIANO_MAX - NOTE_SPAN, centre - NOTE_SPAN // 2))
         self.note_lo, self.note_hi = lo, lo + NOTE_SPAN
 

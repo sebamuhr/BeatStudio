@@ -4,6 +4,14 @@
 continuing in a new chat.** Current version: **v0.41.0** (shown in the window title bar as
 `Beat Studio · v0.41.0`).
 
+## v0.41.1 — fix: notes tab hid the beats on high-pitched soundwaves
+User: "not every soundwave creates notes / only some sounds show on the notes tab." Root: `_fit_note_range`
+centred the piano-roll window ONLY on the take's DETECTED pitch, so a high-pitched take (e.g. an A5 hum,
+window 66–96) pushed the default-C4 beats (midi 60) BELOW the window → invisible. Now it folds in the
+PLACED beats' pitches and keeps EVERY beat in view (beats take priority; the detected-pitch fill is included
+only if it still fits the 30-semitone window). Verified: A5/unpitched/C4 takes all keep the C4 beats
+visible. board_check NOTES VISIBILITY check; 35 checks green.
+
 ## v0.41.0 — STUDIO = CLIP ARRANGER (record your pad performance) + on-screen pad grid
 The Studio is re-architected (plan: `PLAN-v0.41-studio-performance-arranger.md`, decisions locked with the
 user: snap-to-bar, retire the beat grid). Workflow: make samples on the separator → assign to pad columns →

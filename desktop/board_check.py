@@ -491,6 +491,22 @@ assert _ab is not None and float(np.abs(_ab).sum()) > 0, "arrangement rendered s
 w._looper.stop_all(); w._clips = []; w._refresh_arranger()
 print("ARRANGER ok: on-screen pads trigger loops; record lays down bar-snapped clips; arrangement bounces")
 
+# NOTES VISIBILITY: every placed beat must be visible in the notes window, even when the take's
+# DETECTED pitch is far away (the bug: a high take hid the default-C4 beats).
+from beatstudio.separationboard import DEF_MIDI as _DM
+bd.canvas.set_sel_take(0); bd.add_track(); nvtr = bd.tracks[-1]
+nvk = next(i for i, t in enumerate(bd.takes) if t["id"] == nvtr["take"])
+bd.canvas.set_sel_take(nvk)
+_hi = (0.4 * np.sin(2 * np.pi * 880 * np.arange(len(bd.takes[nvk]["buf"])) / SR)).astype("float32")  # A5
+bd.takes[nvk]["buf"][:] = _hi; bd.canvas.set_takes(bd.takes)
+bd.canvas.set_active(bd.tracks.index(nvtr))
+nvtr["points"][:] = [{"id": f"nv{i}", "t": 0.1 + i * 0.2, "v": 0.9, "midi": _DM, "hx": 0, "hy": 0} for i in range(4)]
+bd._set_mode("notes")
+assert all(bd.canvas.note_lo <= p["midi"] <= bd.canvas.note_hi for p in nvtr["points"]), \
+    "placed beats fell outside the notes window (a high take must not hide the C4 beats)"
+bd._set_mode("volume"); bd._delete_track(nvtr)
+print("NOTES VISIBILITY ok: every placed beat stays in the notes window regardless of detected pitch")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):
