@@ -242,6 +242,7 @@ class MainWindow(QMainWindow):
         # Optional hardware control surface (Akai APC Key 25 mk2). Degrades to nothing if absent.
         self._midi = MidiController(self)
         self._midi.note_on.connect(self._midi_note_on)
+        self._midi.note_off.connect(self._midi_note_off)
         self._midi.button.connect(self._midi_button)
         self._midi.knob.connect(self._midi_knob)
         self._midi.pad.connect(self._midi_pad)
@@ -325,16 +326,23 @@ class MainWindow(QMainWindow):
             s = int(a * take_dur * SR); e = int(bb * take_dur * SR)
             s = max(0, min(len(buf), s)); e = max(s + 1, min(len(buf), e))
             buf = buf[s:e]
-        return np.ascontiguousarray(buf, np.float32)
+        return synth.declick(np.ascontiguousarray(buf, np.float32))   # no click at loop start / seam
 
     def _midi_note_on(self, midi, vel):
-        """A key on the APC keybed → play the SELECTED track's instrument at that pitch."""
+        """A key on the APC keybed → play the SELECTED track's instrument at that pitch AND highlight the
+        matching piano key on the notes-view gutter (its on-screen mirror)."""
         b = self._board
-        if b is None or not (0 <= b.canvas.active < len(b.tracks)):
+        if b is None:
             return
-        tr = b.tracks[b.canvas.active]
-        prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
-        self._preview_note(tr["kind"], tr["sound"], prm, int(midi))
+        b.canvas.press_key(int(midi))                     # mirror the key on the piano gutter
+        if 0 <= b.canvas.active < len(b.tracks):
+            tr = b.tracks[b.canvas.active]
+            prm = tr.get("hum_params") if tr["kind"] == "hum" else tr.get("params")
+            self._preview_note(tr["kind"], tr["sound"], prm, int(midi))
+
+    def _midi_note_off(self, midi):
+        if self._board is not None:
+            self._board.canvas.release_key(int(midi))
 
     def _midi_button(self, name, pressed):
         if name == "play":
@@ -1262,7 +1270,7 @@ class MainWindow(QMainWindow):
         else:                                              # drum (+ 'original' fallback): pitch by resampling (C4 = natural)
             v = synth.sample_voice(synth.drum(sound or "kick", 0.9), 60, midi, 0.0, 0.9, loop=False)
         if v is not None and len(v):
-            self.engine.stop_one_shot(); self.engine.one_shot(v)
+            self.engine.stop_one_shot(); self.engine.one_shot(synth.declick(v))
 
     def _preview_synth_sound(self, preset: str, params: dict):
         """Play a single synth voice with its knobs applied (Base / Morph ▶ on the board)."""

@@ -507,6 +507,23 @@ assert all(bd.canvas.note_lo <= p["midi"] <= bd.canvas.note_hi for p in nvtr["po
 bd._set_mode("volume"); bd._delete_track(nvtr)
 print("NOTES VISIBILITY ok: every placed beat stays in the notes window regardless of detected pitch")
 
+# DECLICK + KEY MIRROR: sounds fade in/out (no start/seam click); an APC keybed note highlights the
+# matching piano key on the notes gutter.
+from beatstudio import synth as _syn2
+_dv = _syn2.declick(np.ones(4000, "float32"))
+assert abs(float(_dv[0])) < 1e-3 and abs(float(_dv[-1])) < 1e-3, "declick did not ramp the edges to ~0"
+bd.add_track(); ktr = bd.tracks[-1]; ktr["kind"] = "hum"; ktr["sound"] = "aah"
+ktr["points"][:] = [{"id": "k", "t": 0.3, "v": 0.9, "midi": 60, "hx": 0, "hy": 0}]
+bd._ensure_variations(ktr); bd.canvas.set_sel_take(next(i for i, t in enumerate(bd.takes) if t["id"] == ktr["take"]))
+bd.takes[bd.canvas.sel_take]["loop_a"] = 0.2; bd.takes[bd.canvas.sel_take]["loop_b"] = 0.5
+_ls = w._loop_sample(ktr)
+assert _ls is not None and abs(float(_ls[0])) < 1e-3 and abs(float(_ls[-1])) < 1e-3, "loop sample not declicked"
+bd.canvas.set_active(bd.tracks.index(ktr)); bd._set_mode("notes")
+w._midi_note_on(64, 100); assert 64 in bd.canvas._held_keys, "keybed note did not highlight the piano key"
+w._midi_note_off(64); assert 64 not in bd.canvas._held_keys, "key highlight not released"
+bd._set_mode("volume"); bd._delete_track(ktr)
+print("DECLICK/KEY ok: voices+loops fade (no click); APC keybed highlights its piano-key mirror")
+
 # NO INFINITE LOOP: a nested sync call is guarded
 calls = {"n": 0}; _orig = w._on_board_track_changed
 def _count(x):

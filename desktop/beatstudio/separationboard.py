@@ -161,6 +161,7 @@ class CurveCanvas(QWidget):
         self.mode = "volume"       # "volume" (hits/loudness, as always) | "notes" (piano-roll)
         self.note_lo, self.note_hi = 36, 84   # visible pitch range in notes mode (C2..C6)
         self._note_drag = None     # (track_idx, note_idx) while dragging a note in the piano-roll
+        self._held_keys = set()    # MIDI notes currently held on the APC keybed → highlight the piano key
         self._tie_left = None       # while placing a tied note: the LEFT point of the new segment
         self._place_pos = None      # press position, to tell a plain click (held) from a drag (glide)
         self.takes = []
@@ -387,6 +388,17 @@ class CurveCanvas(QWidget):
 
     def set_playhead(self, frac):
         self.playhead = frac; self.update()
+
+    def press_key(self, midi):
+        """A key was pressed on the APC keybed → highlight its mirror on the notes piano gutter."""
+        self._held_keys.add(int(midi))
+        if self.mode == "notes":
+            self.update()
+
+    def release_key(self, midi):
+        self._held_keys.discard(int(midi))
+        if self.mode == "notes":
+            self.update()
 
     def set_live(self, env, clip=False):
         self.live_env = env or []; self.rec_clip = clip; self.update()
@@ -829,13 +841,20 @@ class CurveCanvas(QWidget):
                 p.setBrush(QBrush(QColor("#ffffff") if active else QColor(255, 255, 255, 150)))
                 p.setPen(QPen(QColor("#0c0c14"), 1.4) if active else Qt.NoPen)
                 p.drawEllipse(QPointF(x, yc), DOT_R, DOT_R)
+        # a lane band across the plot for each APC key held right now (so you SEE the note you played)
+        for m in self._held_keys:
+            if self.note_lo <= m <= self.note_hi:
+                yc = self._note_y(m)
+                p.fillRect(QRectF(x0, yc - lh / 2, x1 - x0, lh), QColor(124, 92, 255, 40))
         # keyboard gutter (drawn last, left of the plot)
         for m in range(self.note_lo, self.note_hi + 1):
             yc = self._note_y(m); top = yc - lh / 2
+            held = m in self._held_keys
             if (m % 12) in _BLACK_KEYS:
-                p.fillRect(QRectF(0, top + lh * 0.15, KB * 0.55, lh * 0.7), QColor("#15151c"))
+                col = QColor("#7c5cff") if held else QColor("#15151c")
+                p.fillRect(QRectF(0, top + lh * 0.15, KB * 0.55, lh * 0.7), col)
             else:
-                p.fillRect(QRectF(0, top, KB, lh), QColor("#e6e6ec"))
+                p.fillRect(QRectF(0, top, KB, lh), QColor("#b7a6ff") if held else QColor("#e6e6ec"))
                 p.setPen(QPen(QColor("#aeaeb8"), 1)); p.drawLine(0, int(top), int(KB), int(top))
                 if m % 12 == 0:
                     p.setPen(QPen(QColor("#30303a"), 1)); p.setFont(theme.sans(8, 700))

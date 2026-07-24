@@ -318,6 +318,21 @@ def drum_roll(inst: str, vel: float, dur: float, vel_end: float | None = None) -
     return (out * env)[:total + int(SR * 0.12)].astype(np.float32)
 
 
+def declick(x: np.ndarray, fade_in_ms=6.0, fade_out_ms=4.0) -> np.ndarray:
+    """Ramp the first/last few ms so a voice or loop never STARTS or seams with a click ('ckssh')."""
+    n = len(x)
+    if n < 8:
+        return x
+    x = np.ascontiguousarray(x, np.float32)
+    fi = min(n // 2, int(SR * fade_in_ms / 1000.0))
+    fo = min(n // 2, int(SR * fade_out_ms / 1000.0))
+    if fi > 1:
+        x[:fi] *= np.linspace(0.0, 1.0, fi, dtype=np.float32)
+    if fo > 1:
+        x[-fo:] *= np.linspace(1.0, 0.0, fo, dtype=np.float32)
+    return x
+
+
 def midi_to_hz(m: float) -> float:
     return 440.0 * (2 ** ((m - 69) / 12.0))
 

@@ -4,6 +4,16 @@
 continuing in a new chat.** Current version: **v0.41.0** (shown in the window title bar as
 `Beat Studio · v0.41.0`).
 
+## v0.41.2 — declick (no start/loop click) + APC keybed highlights its piano-key mirror
+- **Click/static at the start of sounds** was a declick issue: voices and (especially) loop samples cropped
+  to a loop region started/ended on a non-zero sample → a click every loop. New `synth.declick(buf)` ramps
+  the first ~6 ms and last ~4 ms to zero; applied in `_loop_sample` (loop start + seam) and `_preview_note`
+  (keybed audition). Verified: cropped loop sample now starts/ends at ~0, seam jump 0.
+- **Key mirror:** pressing a key on the APC keybed now highlights the matching piano key on the NOTES gutter
+  (`canvas.press_key`/`release_key`, `_held_keys`; drawn as a purple key + a lane band). `_midi_note_on`
+  highlights + plays; `note_off` (newly connected) releases.
+- board_check DECLICK/KEY check; 36 checks green.
+
 ## v0.41.1 — fix: notes tab hid the beats on high-pitched soundwaves
 User: "not every soundwave creates notes / only some sounds show on the notes tab." Root: `_fit_note_range`
 centred the piano-roll window ONLY on the take's DETECTED pitch, so a high-pitched take (e.g. an A5 hum,
