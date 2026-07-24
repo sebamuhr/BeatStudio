@@ -4,6 +4,14 @@
 continuing in a new chat.** Current version: **v0.41.0** (shown in the window title bar as
 `Beat Studio · v0.41.0`).
 
+## v0.41.3 — Loop + Fit tools snap to the grid (loops stay on beat)
+User: loops drift off beat over time. Root: the separator's **Loop tool didn't snap**, so a loop region
+could be a fractional-beat length that slides out of time as it repeats. Now `_loop_press`/`_loop_move` snap
+the region edges via `_gsnap` (respects the ⌗ Snap toggle + the drawn 1/16 grid) — a sloppy drag becomes a
+clean whole-beat/bar loop (verified: 0.134→0.613 snapped to a 4.0-beat / 1-bar loop; Snap off = free). The
+**Fit tool** endpoints snap too, so a stretched slice lands on whole beats. (Studio arranger clips already
+snapped to the bar.) board_check SNAP/TIMESIG extended; 36 checks green.
+
 ## v0.41.2 — declick (no start/loop click) + APC keybed highlights its piano-key mirror
 - **Click/static at the start of sounds** was a declick issue: voices and (especially) loop samples cropped
   to a loop region started/ended on a non-zero sample → a click every loop. New `synth.declick(buf)` ramps

@@ -1018,17 +1018,17 @@ class CurveCanvas(QWidget):
                 self._fit_drag = True; return
             self.fit_a = t; self.fit_b = self._fit_b0 = None; self.update(); return
         if self.fit_a is None:
-            self.fit_a = t; self._fit_hover = t
-        else:
-            self.fit_b = max(self.fit_a + 0.002, t); self._fit_b0 = self.fit_b
+            self.fit_a = self._gsnap(t); self._fit_hover = self.fit_a   # snap to the grid so the stretched
+        else:                                                           # slice lands on whole beats
+            self.fit_b = max(self.fit_a + 0.002, self._gsnap(t)); self._fit_b0 = self.fit_b
         self.update()
 
     def _fit_move(self, pos):
         t, _ = self._from_px(pos.x(), pos.y(), self._active_band())
         if self._fit_drag:
-            self.fit_b = max(self.fit_a + 0.002, min(1.0, t)); self.update()
+            self.fit_b = max(self.fit_a + 0.002, min(1.0, self._gsnap(t))); self.update()   # snapped target
         elif self.fit_a is not None and self.fit_b is None:
-            self._fit_hover = t; self.update()
+            self._fit_hover = self._gsnap(t); self.update()
 
     def _fit_release(self):
         if self._fit_drag:
@@ -1067,7 +1067,7 @@ class CurveCanvas(QWidget):
                 tk["loop_a"] = tk["loop_b"] = None
                 self.loop_changed.emit(self._active_band())
             self.update(); return
-        self._loop_drag = self._t_at_x(pos.x())
+        self._loop_drag = self._gsnap(self._t_at_x(pos.x()))   # snap loop edges to the grid → on beat
         tk = self._sel_tk()
         if tk is not None:
             tk["loop_a"] = tk["loop_b"] = self._loop_drag
@@ -1078,7 +1078,7 @@ class CurveCanvas(QWidget):
             return
         tk = self._sel_tk()
         if tk is not None:
-            tk["loop_b"] = self._t_at_x(pos.x())
+            tk["loop_b"] = self._gsnap(self._t_at_x(pos.x()))  # snapped so the loop stays on the grid
         self.update()
 
     def _loop_release(self):

@@ -461,7 +461,17 @@ bd.sig_box.setCurrentIndex(1); assert cvs.beats_per_bar == 3, "3/4 did not set b
 _snap = bd.snapshot(); assert _snap.get("beats_per_bar") == 3, "time sig not in snapshot"
 bd.sig_box.setCurrentIndex(2)  # back to 4/4
 bd._delete_track(str_)
-print("SNAP/TIMESIG ok: volume beats snap to the grid (toggleable); time-sig sets the bar")
+# the LOOP tool snaps its region to the grid too, so loops are whole-beat and stay on beat
+bd._set_tool("loop"); cvs.snap = True
+cvs.mousePressEvent(E(cvs._to_px_t(0.134), cvs.height() * 0.5))
+cvs.mouseMoveEvent(E(cvs._to_px_t(0.613), cvs.height() * 0.5)); cvs.mouseReleaseEvent(None)
+_tk = bd.takes[bd.canvas._active_band()]
+_dur = len(_tk["buf"]) / SR; _bl = 60.0 / bd.bpm
+if _tk.get("loop_a") is not None:
+    _len_beats = (_tk["loop_b"] - _tk["loop_a"]) * _dur / _bl
+    assert abs(_len_beats / 0.25 - round(_len_beats / 0.25)) < 1e-4, "loop length not snapped to the grid"
+bd._set_tool("pen")
+print("SNAP/TIMESIG ok: volume beats + loop region snap to the grid (toggleable); time-sig sets the bar")
 
 # PAD GRID + PERFORMANCE RECORD + ARRANGER: on-screen pads trigger loops; recording lays down clips
 # (snapped to the bar); the Studio shows clips (beat grid retired); the arrangement bounces to audio.
